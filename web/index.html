@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terrava — Book Your Flight</title>
+<script>
+  // Decide the theme before first paint, so there's no flash of the wrong theme.
+  (function () {
+    var saved = localStorage.getItem("terrava-theme");
+    var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="promo-strip">
+  <span>🌞 Seat sale — book early, fly happy.</span>
+</div>
+
+<header class="board">
+  <div class="board__brand">
+    <span class="board__mark">✈</span>
+    <span class="board__title">terrava</span>
+  </div>
+  <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode"></button>
+  <div class="board__clock" id="clock">--:--:--</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab" data-tab="flights">Browse Flights</button>
+  <button class="tab is-active" data-tab="book">Book a Flight</button>
+  <button class="tab" data-tab="manage">My Booking</button>
+  <button class="tab" data-tab="standby">Waitlist</button>
+  <button class="tab" data-tab="manifest">Manifest (staff view)</button>
+</nav>
+
+<main class="app">
+
+  <!-- BROWSE FLIGHTS (read-only lookup, no commitment) -->
+  <section class="panel" id="panel-flights">
+    <div class="panel__head">
+      <h1>Where would you like to go?</h1>
+      <p class="sub">Browse routes and fares. When you're ready, head to <b>Book a Flight</b> to reserve one.</p>
+    </div>
+    <form class="filterbar" id="flightFilterForm">
+      <input type="text" id="filterOrigin" placeholder="Origin (e.g. MNL)">
+      <span class="filterbar__arrow">→</span>
+      <input type="text" id="filterDest" placeholder="Destination (e.g. CEB)">
+      <button type="submit" class="btn btn--accent">Search</button>
+      <button type="button" class="btn btn--ghost" id="clearFilter">Show all</button>
+    </form>
+    <div class="split-table" id="flightsTable"></div>
+  </section>
+
+  <!-- BOOK A FLIGHT: gated step-by-step wizard -->
+  <section class="panel is-active" id="panel-book">
+    <div class="panel__head">
+      <h1>Book a flight</h1>
+      <p class="sub">Follow each step in order — you'll unlock the next once the current one's complete, same as on the airline's own site.</p>
+    </div>
+
+    <ol class="stepper" id="stepper">
+      <li class="step is-current" data-step="1"><span class="step__num">1</span><span class="step__label">Route</span></li>
+      <li class="step" data-step="2"><span class="step__num">2</span><span class="step__label">Passengers</span></li>
+      <li class="step" data-step="3"><span class="step__num">3</span><span class="step__label">Seats</span></li>
+      <li class="step" data-step="4"><span class="step__num">4</span><span class="step__label">Baggage</span></li>
+      <li class="step" data-step="5"><span class="step__num">5</span><span class="step__label">Review</span></li>
+      <li class="step" data-step="6"><span class="step__num">6</span><span class="step__label">Done</span></li>
+    </ol>
+
+    <!-- STEP 1: choose route + flight -->
+    <div class="wizard-step is-active" data-step="1">
+      <div class="card">
+        <h2>Step 1 — Choose your route</h2>
+        <form class="filterbar" id="wizardFilterForm">
+          <input type="text" id="wOrigin" placeholder="From (e.g. MNL)">
+          <span class="filterbar__arrow">→</span>
+          <input type="text" id="wDest" placeholder="To (e.g. CEB)">
+          <button type="submit" class="btn btn--accent">Search flights</button>
+        </form>
+        <div class="split-table" id="wizardFlightsTable"></div>
+      </div>
+      <div class="wizard-nav">
+        <span></span>
+        <button type="button" class="btn btn--accent" id="toStep2Btn" disabled>Continue to passengers</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: passenger details -->
+    <div class="wizard-step" data-step="2">
+      <div class="card">
+        <h2>Step 2 — Who's flying?</h2>
+        <div class="selected-flight-banner" id="selectedFlightBanner"></div>
+        <label class="field">
+          <span>Contact name or email (for this booking)</span>
+          <input type="text" id="wContact" placeholder="e.g. Juan Dela Cruz">
+        </label>
+        <label class="field">
+          <span>Number of passengers</span>
+          <input type="number" id="wPaxCount" min="1" max="20" value="1">
+        </label>
+        <button type="button" class="btn btn--ghost" id="generatePaxBtn">Set passenger count</button>
+        <div class="passenger-list" id="wPassengerList"></div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn--ghost" data-back="1">Back</button>
+        <button type="button" class="btn btn--accent" id="toStep3Btn">Continue to seats</button>
+      </div>
+      <div class="result" id="step2Error"></div>
+    </div>
+
+    <!-- STEP 3: seat selection -->
+    <div class="wizard-step" data-step="3">
+      <div class="card">
+        <div class="seatmap__head">
+          <h2>Step 3 — Choose your seats</h2>
+          <div class="legend">
+            <span class="legend__item"><i class="dot dot--free"></i>Free</span>
+            <span class="legend__item"><i class="dot dot--taken"></i>Taken</span>
+            <span class="legend__item"><i class="dot dot--pick"></i>Your pick</span>
+          </div>
+        </div>
+        <p class="sub">Tap a passenger chip below, then tap their seat on the map.</p>
+        <div class="pax-chip-row" id="paxChipRow"></div>
+        <div class="plane">
+          <div class="plane__nose">▲ nose</div>
+          <div class="seatgrid" id="seatGrid"></div>
+        </div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn--ghost" data-back="2">Back</button>
+        <button type="button" class="btn btn--accent" id="toStep4Btn">Continue to baggage</button>
+      </div>
+      <div class="result" id="step3Error"></div>
+    </div>
+
+    <!-- STEP 4: baggage -->
+    <div class="wizard-step" data-step="4">
+      <div class="card">
+        <h2>Step 4 — Baggage</h2>
+        <p class="sub">First 20kg is free per passenger. Extra weight is billed at ₱5/kg.</p>
+        <div id="baggageList"></div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn--ghost" data-back="3">Back</button>
+        <button type="button" class="btn btn--accent" id="toStep5Btn">Continue to review</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: review + confirm -->
+    <div class="wizard-step" data-step="5">
+      <div class="card">
+        <h2>Step 5 — Review your booking</h2>
+        <div id="reviewSummary"></div>
+      </div>
+      <div class="wizard-nav">
+        <button type="button" class="btn btn--ghost" data-back="4">Back</button>
+        <button type="button" class="btn btn--accent" id="confirmBookingBtn">Confirm &amp; book</button>
+      </div>
+      <div class="result" id="step5Error"></div>
+    </div>
+
+    <!-- STEP 6: confirmation -->
+    <div class="wizard-step" data-step="6">
+      <div class="card confirmation-card" id="confirmationCard"></div>
+    </div>
+
+  </section>
+
+  <!-- MANAGE BOOKING -->
+  <section class="panel" id="panel-manage">
+    <div class="panel__head">
+      <h1>Manage my booking</h1>
+      <p class="sub">Look up your PNR to change details, cancel, or restore a cancelled trip.</p>
+    </div>
+
+    <form class="filterbar" id="pnrLookupForm">
+      <input type="text" id="pnrInput" placeholder="PNR e.g. 7F3K9Q" maxlength="6" style="text-transform:uppercase">
+      <button type="submit" class="btn btn--accent">Look up</button>
+      <button type="button" class="btn btn--ghost" id="undoBtn">Undo last cancellation</button>
+    </form>
+
+    <div id="bookingDetail"></div>
+  </section>
+
+  <!-- STANDBY -->
+  <section class="panel" id="panel-standby">
+    <div class="panel__head">
+      <h1>Join the waitlist</h1>
+      <p class="sub">For flights that are fully booked — you'll be offered a seat in the order you joined.</p>
+    </div>
+    <div class="card card--narrow">
+      <label class="field">
+        <span>Flight</span>
+        <select id="standbyFlightSelect"></select>
+      </label>
+      <label class="field">
+        <span>Your name</span>
+        <input type="text" id="standbyName">
+      </label>
+      <label class="field">
+        <span>Age</span>
+        <input type="number" id="standbyAge" min="0">
+      </label>
+      <button type="button" class="btn btn--accent" id="standbyBtn">Join waitlist</button>
+      <div class="result" id="standbyResult"></div>
+    </div>
+  </section>
+
+  <!-- MANIFEST (staff/demo view) -->
+  <section class="panel" id="panel-manifest">
+    <div class="panel__head">
+      <h1>Flight manifest</h1>
+      <p class="sub">Airline staff view — full passenger list for a given flight. Not part of the passenger booking flow.</p>
+    </div>
+    <form class="filterbar" id="manifestForm">
+      <select id="manifestFlightSelect"></select>
+      <button type="submit" class="btn btn--accent">Load manifest</button>
+    </form>
+    <div class="split-table" id="manifestTable"></div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
