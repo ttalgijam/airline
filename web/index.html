@@ -23,12 +23,22 @@
 </div>
 
 <header class="board">
+  <!-- Left Side: Brand Logo -->
   <div class="board__brand">
     <span class="board__mark">✈</span>
     <span class="board__title">terrava</span>
   </div>
-  <button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode"></button>
-  <div class="board__clock" id="clock">--:--:--</div>
+
+  <!-- Right Side: Theme Toggle + Clock + Login Buttons -->
+  <div class="board__actions">
+    <button type="button" class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">🌙</button>
+    <div class="board__clock" id="clock">--:--:--</div>
+
+    <div id="authNav" class="auth-controls">
+      <button type="button" onclick="openLoginModal('user')">User Login</button>
+      <button type="button" onclick="openLoginModal('staff')">Staff Login</button>
+    </div>
+  </div>
 </header>
 
 <nav class="tabs" id="tabs">
@@ -36,7 +46,6 @@
   <button class="tab is-active" data-tab="book">Book a Flight</button>
   <button class="tab" data-tab="manage">My Booking</button>
   <button class="tab" data-tab="standby">Waitlist</button>
-  <button class="tab" data-tab="manifest">Manifest (staff view)</button>
 </nav>
 
 <main class="app">
@@ -189,41 +198,52 @@
   </section>
 
   <!-- STANDBY -->
-  <section class="panel" id="panel-standby">
-    <div class="panel__head">
-      <h1>Join the waitlist</h1>
-      <p class="sub">For flights that are fully booked — you'll be offered a seat in the order you joined.</p>
-    </div>
-    <div class="card card--narrow">
-      <label class="field">
-        <span>Flight</span>
-        <select id="standbyFlightSelect"></select>
-      </label>
-      <label class="field">
-        <span>Your name</span>
-        <input type="text" id="standbyName">
-      </label>
-      <label class="field">
-        <span>Age</span>
-        <input type="number" id="standbyAge" min="0">
-      </label>
-      <button type="button" class="btn btn--accent" id="standbyBtn">Join waitlist</button>
-      <div class="result" id="standbyResult"></div>
-    </div>
-  </section>
+<section class="panel" id="panel-standby">
+  <div class="panel__head">
+    <h1>Join the waitlist</h1>
+    <p class="sub">For flights that are fully booked — you'll be offered a seat in the order you joined.</p>
+  </div>
 
-  <!-- MANIFEST (staff/demo view) -->
-  <section class="panel" id="panel-manifest">
-    <div class="panel__head">
-      <h1>Flight manifest</h1>
-      <p class="sub">Airline staff view — full passenger list for a given flight. Not part of the passenger booking flow.</p>
+  <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start; margin-top: 20px;">
+    <!-- LEFT COLUMN: FORM -->
+    <div class="card">
+      <form id="waitlistForm" onsubmit="handleWaitlistSubmit(event)">
+        <div class="field">
+          <label for="waitlistFlight">Flight</label>
+          <select id="waitlistFlight" required>
+            <option value="">Select a flight...</option>
+            <option value="DG6001">DG6001 — Manila (MNL) ➔ Cebu (CEB)</option>
+            <option value="DG6005">DG6005 — Manila (MNL) ➔ Davao (DVO)</option>
+            <option value="5J561">5J561 — Cebu (CEB) ➔ Boracay (MPH)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="waitlistName">Your name</label>
+          <input type="text" id="waitlistName" placeholder="e.g. Juan Cruz" required />
+        </div>
+
+        <div class="field">
+          <label for="waitlistAge">Age</label>
+          <input type="number" id="waitlistAge" min="1" max="120" placeholder="e.g. 25" required />
+        </div>
+
+        <button type="submit" class="btn btn--accent">Join waitlist</button>
+      </form>
+
+      <!-- Feedback message area -->
+      <div id="waitlistResult" class="result" style="margin-top: 14px;"></div>
     </div>
-    <form class="filterbar" id="manifestForm">
-      <select id="manifestFlightSelect"></select>
-      <button type="submit" class="btn btn--accent">Load manifest</button>
-    </form>
-    <div class="split-table" id="manifestTable"></div>
-  </section>
+
+    <!-- RIGHT COLUMN: WAITLIST LIST DISPLAY -->
+    <div class="card">
+      <h3 style="margin-top: 0; margin-bottom: 12px;">Your Waitlist Entries</h3>
+      <div id="waitlistTable">
+        <div class="empty-state">No waitlist entries yet.</div>
+      </div>
+    </div>
+  </div>
+</section>
 
 </main>
 

@@ -298,25 +298,25 @@ public class BookingManager {
     }
 
     /** displayManifest(): tabular list of all confirmed passengers on a flight. */
-    public String displayManifest(String flightId) {
-        Flight f = findFlightById(flightId);
-        if (f == null) return "Flight " + flightId + " not found.";
+    public String displayManifest(String flightId, User requester) {
+        if (requester == null || !"STAFF".equalsIgnoreCase(requester.getRole())) {
+            return "Access denied: Staff permission required.";
+        }
+
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Manifest for %s (%s -> %s, %s)%n", f.getFlightId(), f.getOrigin(),
-                f.getDestination(), f.getDepartureTime()));
+        sb.append(String.format("Manifest for Flight %s%n", flightId));
         sb.append(String.format("%-6s %-20s %-5s %-6s %-6s %-8s %-8s%n",
-                "PNR", "Name", "Age", "Type", "Seat", "Bag(kg)", "Fare($)"));
-        boolean any = false;
-        for (Booking b : bookings) {
-            if (!b.getFlightId().equalsIgnoreCase(flightId)) continue;
-            if (b.getStatus() == Booking.Status.CANCELLED) continue;
-            for (Passenger p : b.getPassengers()) {
-                any = true;
-                sb.append(String.format("%-6s %-20s %-5s %-6s %-6s %-8s %-8s%n",
-        "PNR", "Name", "Age", "Type", "Seat", "Bag(kg)", "Fare(₱)"));
+                "PNR", "Name", "Age", "Type", "Seat", "Bag(kg)", "Fare(₱)"));
+
+        for (Booking b : bookings.values()) {
+            if (b.getFlightId().equalsIgnoreCase(flightId) && "CONFIRMED".equals(b.getStatus())) {
+                for (Passenger p : b.getPassengers()) {
+                    sb.append(String.format("%-6s %-20s %-5d %-6s %-6s %-8.1f ₱%-7.2f%n",
+                            b.getPnr(), p.getName(), p.getAge(), p.getType(),
+                            p.getSeatNumber(), p.getBaggageWeight(), b.getTotalFare()));
+                }
             }
         }
-        if (!any) sb.append("(no confirmed passengers yet)\n");
         return sb.toString();
     }
 

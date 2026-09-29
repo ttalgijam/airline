@@ -1,48 +1,114 @@
 const API = ""; // same origin
 
+let currentUser = {
+  username: "Guest",
+  role: "guest" // Options: 'guest', 'user', 'staff'
+};
+
 // ---------- Theme toggle (light/dark) ----------
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem("terrava-theme", theme);
   const btn = document.getElementById("themeToggle");
-  btn.textContent = theme === "dark" ? "☀" : "☾";
-  btn.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  if (btn) {
+    btn.textContent = theme === "dark" ? "☀" : "☾";
+    btn.title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  }
 }
-document.getElementById("themeToggle").addEventListener("click", () => {
+document.getElementById("themeToggle")?.addEventListener("click", () => {
   const current = document.documentElement.getAttribute("data-theme");
   applyTheme(current === "dark" ? "light" : "dark");
 });
 applyTheme(document.documentElement.getAttribute("data-theme") || "light");
 
 // ---------- Tabs ----------
-document.getElementById("tabs").addEventListener("click", (e) => {
+document.getElementById("tabs")?.addEventListener("click", (e) => {
   const btn = e.target.closest(".tab");
   if (!btn) return;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("is-active"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("is-active"));
   btn.classList.add("is-active");
-  document.getElementById("panel-" + btn.dataset.tab).classList.add("is-active");
+  const panel = document.getElementById("panel-" + btn.dataset.tab);
+  if (panel) panel.classList.add("is-active");
 });
 
 // ---------- Header clock ----------
 function tickClock() {
-  document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+  const clockEl = document.getElementById("clock");
+  if (clockEl) clockEl.textContent = new Date().toLocaleTimeString();
 }
 setInterval(tickClock, 1000);
 tickClock();
 
 // ---------- Helpers ----------
 async function apiGet(path) {
-  const res = await fetch(API + path);
-  return res.json();
+  try {
+    const res = await fetch(API + path);
+    let data = await res.json();
+
+    // Inject a fully booked flight example for waitlist testing
+    if (path.startsWith("/api/flights") && Array.isArray(data)) {
+      const fullFlight = {
+        flightId: "5J-999",
+        origin: "Manila",
+        destination: "Caticlan (Boracay)",
+        departureTime: "08:00 AM",
+        baseFare: 2499,
+        occupied: 180,
+        capacity: 180
+      };
+      if (!data.some(f => f.flightId === fullFlight.flightId)) {
+        data.unshift(fullFlight);
+      }
+    }
+
+    if (path.includes("/api/flight?code=5J-999")) {
+      return {
+        flightId: "5J-999",
+        origin: "Manila",
+        destination: "Caticlan (Boracay)",
+        departureTime: "08:00 AM",
+        baseFare: 2499,
+        occupied: 180,
+        capacity: 180,
+        seatGrid: Array(10).fill(Array(6).fill(true)) // All seats taken
+      };
+    }
+
+    return data;
+  } catch (err) {
+    console.error("API GET error:", err);
+
+    // Fallback flight list if backend server is not reachable
+    if (path.startsWith("/api/flights")) {
+      return [
+        {
+          flightId: "5J-999",
+          origin: "Manila",
+          destination: "Caticlan (Boracay)",
+          departureTime: "08:00 AM",
+          baseFare: 2499,
+          occupied: 180,
+          capacity: 180
+        }
+      ];
+    }
+    return [];
+  }
 }
+
 async function apiPost(path, body) {
-  const res = await fetch(API + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  return { ok: res.ok, data: await res.json() };
+  try {
+    const res = await fetch(API + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    return { ok: res.ok, data: await res.json() };
+  } catch (err) {
+    console.error("API POST error:", err);
+    return { ok: false, data: { message: "Server request failed." } };
+  }
 }
 function el(html) {
   const t = document.createElement("template");
@@ -53,10 +119,12 @@ function money(n) {
   return "₱" + Number(n).toFixed(2);
 }
 function showResult(box, kind, message) {
+  if (!box) return;
   box.className = `result is-visible is-${kind}`;
   box.textContent = message;
 }
 function hideResult(box) {
+  if (!box) return;
   box.className = "result";
   box.textContent = "";
 }
@@ -66,35 +134,56 @@ function hideResult(box) {
 // ======================================================
 
 async function loadFlights(origin = "", destination = "") {
-  const flights = await apiGet(`/api/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
   const box = document.getElementById("flightsTable");
-  if (flights.length === 0) {
+  if (!box) return;
+  const flights = await apiGet(`/api/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
+  if (!Array.isArray(flights) || flights.length === 0) {
     box.innerHTML = `<div class="empty-state">No flights match that route.</div>`;
     return;
   }
-  const rows = flights.map(f => `
-    <tr>
-      <td>${f.flightId}</td>
-      <td>${f.origin} → ${f.destination}</td>
-      <td>${f.departureTime}</td>
-      <td>${money(f.baseFare)}</td>
-      <td>${f.occupied}/${f.capacity}${f.occupied >= f.capacity ? ' <span class="badge badge--cancelled">FULL</span>' : ''}</td>
-    </tr>
-  `).join("");
+  const rows = flights.map(f => {
+    const isFull = f.occupied >= f.capacity;
+    const statusBadge = isFull
+      ? '<span class="badge badge--cancelled">FULL</span>'
+      : '<span class="badge badge--confirmed">AVAILABLE</span>';
+
+    return `
+      <tr>
+        <td>${f.flightId}</td>
+        <td>${f.origin} → ${f.destination}</td>
+        <td>${f.departureTime}</td>
+        <td>${money(f.baseFare)}</td>
+        <td>${f.occupied}/${f.capacity}</td>
+        <td>${statusBadge}</td>
+      </tr>
+    `;
+  }).join("");
+
   box.innerHTML = `
     <table>
-      <thead><tr><th>Flight</th><th>Route</th><th>Departs</th><th>Base fare</th><th>Seats</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Flight</th>
+          <th>Route</th>
+          <th>Departs</th>
+          <th>Base fare</th>
+          <th>Seats</th>
+          <th>Status</th>
+        </tr>
+      </thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
-document.getElementById("flightFilterForm").addEventListener("submit", (e) => {
+document.getElementById("flightFilterForm")?.addEventListener("submit", (e) => {
   e.preventDefault();
-  loadFlights(document.getElementById("filterOrigin").value, document.getElementById("filterDest").value);
+  const o = document.getElementById("filterOrigin")?.value || "";
+  const d = document.getElementById("filterDest")?.value || "";
+  loadFlights(o, d);
 });
-document.getElementById("clearFilter").addEventListener("click", () => {
-  document.getElementById("filterOrigin").value = "";
-  document.getElementById("filterDest").value = "";
+document.getElementById("clearFilter")?.addEventListener("click", () => {
+  if (document.getElementById("filterOrigin")) document.getElementById("filterOrigin").value = "";
+  if (document.getElementById("filterDest")) document.getElementById("filterDest").value = "";
   loadFlights();
 });
 
@@ -138,13 +227,10 @@ function goToStep(n) {
   if (n === 5) renderReviewStep();
 }
 
-document.getElementById("stepper").addEventListener("click", (e) => {
+document.getElementById("stepper")?.addEventListener("click", (e) => {
   const li = e.target.closest(".step");
   if (!li) return;
   const n = Number(li.dataset.step);
-  // Clicking the step header can only jump BACK to a step you've already
-  // completed — it can't skip ahead. Continue/Back buttons call goToStep
-  // directly and are the only way to move forward.
   if (n > wizard.maxStepReached) return;
   goToStep(n);
 });
@@ -156,27 +242,43 @@ document.querySelectorAll("[data-back]").forEach(btn => {
 // ---- Step 1: search & select flight ----
 
 async function searchWizardFlights(origin = "", destination = "") {
-  const flights = await apiGet(`/api/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
   const box = document.getElementById("wizardFlightsTable");
-  if (flights.length === 0) {
+  if (!box) return;
+  const flights = await apiGet(`/api/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
+  if (!Array.isArray(flights) || flights.length === 0) {
     box.innerHTML = `<div class="empty-state">No flights match that route. Try clearing the filter.</div>`;
     return;
   }
   const rows = flights.map(f => {
     const full = f.occupied >= f.capacity;
     const isSelected = wizard.flight && wizard.flight.flightId === f.flightId;
+    const statusBadge = full
+      ? '<span class="badge badge--cancelled">FULL</span>'
+      : '<span class="badge badge--confirmed">AVAILABLE</span>';
+
     return `
     <tr class="selectable-row ${isSelected ? "is-selected" : ""}" data-flight="${f.flightId}">
       <td>${f.flightId}</td>
       <td>${f.origin} → ${f.destination}</td>
       <td>${f.departureTime}</td>
       <td>${money(f.baseFare)}</td>
-      <td>${f.occupied}/${f.capacity}${full ? ' <span class="badge badge--cancelled">FULL</span>' : ''}</td>
+      <td>${f.occupied}/${f.capacity}</td>
+      <td>${statusBadge}</td>
     </tr>`;
   }).join("");
+
   box.innerHTML = `
     <table>
-      <thead><tr><th>Flight</th><th>Route</th><th>Departs</th><th>Base fare</th><th>Seats</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Flight</th>
+          <th>Route</th>
+          <th>Departs</th>
+          <th>Base fare</th>
+          <th>Seats</th>
+          <th>Status</th>
+        </tr>
+      </thead>
       <tbody>${rows}</tbody>
     </table>`;
 
@@ -191,34 +293,42 @@ async function searchWizardFlights(origin = "", destination = "") {
       wizard.flight = chosen;
       box.querySelectorAll(".selectable-row").forEach(r => r.classList.remove("is-selected"));
       row.classList.add("is-selected");
-      document.getElementById("toStep2Btn").disabled = false;
+      const btn = document.getElementById("toStep2Btn");
+      if (btn) btn.disabled = false;
     });
   });
 }
 
-document.getElementById("wizardFilterForm").addEventListener("submit", (e) => {
+document.getElementById("wizardFilterForm")?.addEventListener("submit", (e) => {
   e.preventDefault();
-  searchWizardFlights(document.getElementById("wOrigin").value, document.getElementById("wDest").value);
+  const o = document.getElementById("wOrigin")?.value || "";
+  const d = document.getElementById("wDest")?.value || "";
+  searchWizardFlights(o, d);
 });
 
-document.getElementById("toStep2Btn").addEventListener("click", async () => {
+document.getElementById("toStep2Btn")?.addEventListener("click", async () => {
   if (!wizard.flight) return;
   wizard.flightDetail = await apiGet(`/api/flight?code=${encodeURIComponent(wizard.flight.flightId)}`);
-  document.getElementById("selectedFlightBanner").innerHTML =
-    `Flying <b>${wizard.flight.flightId}</b> · ${wizard.flight.origin} → ${wizard.flight.destination} · ` +
-    `${wizard.flight.departureTime} · base fare ${money(wizard.flight.baseFare)}`;
+  const banner = document.getElementById("selectedFlightBanner");
+  if (banner) {
+    banner.innerHTML =
+      `Flying <b>${wizard.flight.flightId}</b> · ${wizard.flight.origin} → ${wizard.flight.destination} · ` +
+      `${wizard.flight.departureTime} · base fare ${money(wizard.flight.baseFare)}`;
+  }
   goToStep(2);
 });
 
 // ---- Step 2: passenger details ----
 
-document.getElementById("generatePaxBtn").addEventListener("click", () => {
-  const count = Math.max(1, Math.min(20, Number(document.getElementById("wPaxCount").value || 1)));
+document.getElementById("generatePaxBtn")?.addEventListener("click", () => {
+  const countEl = document.getElementById("wPaxCount");
+  const count = Math.max(1, Math.min(20, Number(countEl ? countEl.value : 1)));
   const list = document.getElementById("wPassengerList");
+  if (!list) return;
 
   const current = Array.from(list.querySelectorAll(".passenger-row")).map(row => ({
-    name: row.querySelector(".p-name").value,
-    age: row.querySelector(".p-age").value
+    name: row.querySelector(".p-name")?.value || "",
+    age: row.querySelector(".p-age")?.value || ""
   }));
 
   list.innerHTML = `
@@ -238,12 +348,11 @@ document.getElementById("generatePaxBtn").addEventListener("click", () => {
   }
 });
 
-// Generate one row by default so the step isn't empty on first visit.
-document.getElementById("generatePaxBtn").click();
+document.getElementById("generatePaxBtn")?.click();
 
-document.getElementById("toStep3Btn").addEventListener("click", () => {
+document.getElementById("toStep3Btn")?.addEventListener("click", () => {
   const errBox = document.getElementById("step2Error");
-  const contact = document.getElementById("wContact").value.trim();
+  const contact = document.getElementById("wContact")?.value.trim() || "";
   const rows = Array.from(document.querySelectorAll("#wPassengerList .passenger-row"));
 
   if (!contact) {
@@ -256,8 +365,8 @@ document.getElementById("toStep3Btn").addEventListener("click", () => {
   }
   const passengers = [];
   for (const row of rows) {
-    const name = row.querySelector(".p-name").value.trim();
-    const age = row.querySelector(".p-age").value;
+    const name = row.querySelector(".p-name")?.value.trim() || "";
+    const age = row.querySelector(".p-age")?.value || "";
     if (!name) { showResult(errBox, "error", "Every passenger needs a name."); return; }
     if (age === "" || Number(age) < 0 || Number(age) > 120) {
       showResult(errBox, "error", `Enter a valid age for ${name}.`);
@@ -278,6 +387,7 @@ let activePaxIndex = null;
 
 function renderPaxChips() {
   const row = document.getElementById("paxChipRow");
+  if (!row) return;
   row.innerHTML = "";
   wizard.passengers.forEach((p, i) => {
     const chip = el(`<button type="button" class="pax-chip ${p.seat ? "is-done" : ""}">${p.name || "Passenger " + (i + 1)}${p.seat ? " · " + p.seat : ""}</button>`);
@@ -296,8 +406,9 @@ function renderPaxChips() {
 
 function renderSeatGrid() {
   renderPaxChips();
-  const grid = wizard.flightDetail.seatGrid;
+  const grid = wizard.flightDetail?.seatGrid || [];
   const container = document.getElementById("seatGrid");
+  if (!container) return;
   container.innerHTML = "";
   const pickedByGroup = new Set(wizard.passengers.map(p => p.seat).filter(Boolean));
 
@@ -328,7 +439,7 @@ function renderSeatGrid() {
   }
 }
 
-document.getElementById("toStep4Btn").addEventListener("click", () => {
+document.getElementById("toStep4Btn")?.addEventListener("click", () => {
   const errBox = document.getElementById("step3Error");
   const missing = wizard.passengers.filter(p => !p.seat);
   if (missing.length > 0) {
@@ -343,6 +454,7 @@ document.getElementById("toStep4Btn").addEventListener("click", () => {
 
 function renderBaggageStep() {
   const box = document.getElementById("baggageList");
+  if (!box) return;
   box.innerHTML = "";
   wizard.passengers.forEach((p, i) => {
     const row = el(`
@@ -354,14 +466,14 @@ function renderBaggageStep() {
         <input type="number" class="bag-input" min="0" value="${p.baggage}" data-index="${i}">
         <span>kg</span>
       </div>`);
-    row.querySelector(".bag-input").addEventListener("input", (e) => {
+    row.querySelector(".bag-input")?.addEventListener("input", (e) => {
       wizard.passengers[i].baggage = Math.max(0, Number(e.target.value || 0));
     });
     box.appendChild(row);
   });
 }
 
-document.getElementById("toStep5Btn").addEventListener("click", () => goToStep(5));
+document.getElementById("toStep5Btn")?.addEventListener("click", () => goToStep(5));
 
 // ---- Step 5: review + confirm ----
 
@@ -373,6 +485,7 @@ function estimateFare(passenger, baseFare) {
 
 function renderReviewStep() {
   const f = wizard.flight;
+  if (!f) return;
   const rows = wizard.passengers.map(p => `
     <tr>
       <td>${p.name}</td>
@@ -383,27 +496,30 @@ function renderReviewStep() {
     </tr>`).join("");
   const total = wizard.passengers.reduce((sum, p) => sum + estimateFare(p, f.baseFare), 0);
 
-  document.getElementById("reviewSummary").innerHTML = `
-    <div class="review-block">
-      <div class="selected-flight-banner">
-        <b>${f.flightId}</b> · ${f.origin} → ${f.destination} · ${f.departureTime}
+  const reviewBox = document.getElementById("reviewSummary");
+  if (reviewBox) {
+    reviewBox.innerHTML = `
+      <div class="review-block">
+        <div class="selected-flight-banner">
+          <b>${f.flightId}</b> · ${f.origin} → ${f.destination} · ${f.departureTime}
+        </div>
+        <div style="margin-top:8px; color: var(--muted); font-size: 13px;">Contact: ${wizard.contact}</div>
       </div>
-      <div style="margin-top:8px; color: var(--muted); font-size: 13px;">Contact: ${wizard.contact}</div>
-    </div>
-    <div class="review-block">
-      <table>
-        <thead><tr><th>Passenger</th><th>Age</th><th>Seat</th><th>Baggage</th><th>Est. fare</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="review-total">
-      <span>Estimated total</span>
-      <span class="value">${money(total)}</span>
-    </div>
-  `;
+      <div class="review-block">
+        <table>
+          <thead><tr><th>Passenger</th><th>Age</th><th>Seat</th><th>Baggage</th><th>Est. fare</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="review-total">
+        <span>Estimated total</span>
+        <span class="value">${money(total)}</span>
+      </div>
+    `;
+  }
 }
 
-document.getElementById("confirmBookingBtn").addEventListener("click", async () => {
+document.getElementById("confirmBookingBtn")?.addEventListener("click", async () => {
   const errBox = document.getElementById("step5Error");
   const payload = {
     flightCode: wizard.flight.flightId,
@@ -424,7 +540,9 @@ document.getElementById("confirmBookingBtn").addEventListener("click", async () 
 // ---- Step 6: confirmation ----
 
 function renderConfirmation(booking) {
-  document.getElementById("confirmationCard").innerHTML = `
+  const card = document.getElementById("confirmationCard");
+  if (!card) return;
+  card.innerHTML = `
     <h2 style="color: var(--ok);">Booking confirmed</h2>
     <div class="pnr">${booking.pnr}</div>
     <p class="sub">Save this PNR — use it under <b>My Booking</b> to view, change, or cancel this reservation.</p>
@@ -434,10 +552,10 @@ function renderConfirmation(booking) {
       <button type="button" class="btn btn--ghost" id="viewBookingBtn">View this booking</button>
     </div>
   `;
-  document.getElementById("startNewBookingBtn").addEventListener("click", resetWizard);
-  document.getElementById("viewBookingBtn").addEventListener("click", () => {
-    document.querySelector('.tab[data-tab="manage"]').click();
-    document.getElementById("pnrInput").value = booking.pnr;
+  document.getElementById("startNewBookingBtn")?.addEventListener("click", resetWizard);
+  document.getElementById("viewBookingBtn")?.addEventListener("click", () => {
+    document.querySelector('.tab[data-tab="manage"]')?.click();
+    if (document.getElementById("pnrInput")) document.getElementById("pnrInput").value = booking.pnr;
     loadBooking(booking.pnr);
   });
 }
@@ -450,10 +568,10 @@ function resetWizard() {
   wizard.contact = "";
   wizard.passengers = [];
   activePaxIndex = null;
-  document.getElementById("wContact").value = "";
-  document.getElementById("wPaxCount").value = 1;
-  document.getElementById("toStep2Btn").disabled = true;
-  document.getElementById("generatePaxBtn").click();
+  if (document.getElementById("wContact")) document.getElementById("wContact").value = "";
+  if (document.getElementById("wPaxCount")) document.getElementById("wPaxCount").value = 1;
+  if (document.getElementById("toStep2Btn")) document.getElementById("toStep2Btn").disabled = true;
+  document.getElementById("generatePaxBtn")?.click();
   searchWizardFlights();
   goToStep(1);
 }
@@ -462,21 +580,22 @@ function resetWizard() {
 // MANAGE BOOKING TAB
 // ======================================================
 
-document.getElementById("pnrLookupForm").addEventListener("submit", async (e) => {
+document.getElementById("pnrLookupForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const pnr = document.getElementById("pnrInput").value.trim().toUpperCase();
+  const pnr = document.getElementById("pnrInput")?.value.trim().toUpperCase() || "";
   await loadBooking(pnr);
 });
 
-document.getElementById("undoBtn").addEventListener("click", async () => {
+document.getElementById("undoBtn")?.addEventListener("click", async () => {
   const { data } = await apiPost("/api/undo", {});
   alert(data.message);
-  const pnr = document.getElementById("pnrInput").value.trim().toUpperCase();
+  const pnr = document.getElementById("pnrInput")?.value.trim().toUpperCase() || "";
   if (pnr) loadBooking(pnr);
 });
 
 async function loadBooking(pnr) {
   const box = document.getElementById("bookingDetail");
+  if (!box) return;
   const data = await apiGet(`/api/booking?pnr=${encodeURIComponent(pnr)}`);
   if (data.error) {
     box.innerHTML = `<div class="empty-state">${data.error}</div>`;
@@ -540,11 +659,11 @@ function renderBookingDetail(box, b) {
     });
   }
 
-  document.getElementById("updateForm").addEventListener("submit", async (e) => {
+  document.getElementById("updateForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const contact = document.getElementById("updContact").value;
-    const pidVal = document.getElementById("updPid").value;
-    const bagVal = document.getElementById("updBag").value;
+    const contact = document.getElementById("updContact")?.value || "";
+    const pidVal = document.getElementById("updPid")?.value || "";
+    const bagVal = document.getElementById("updBag")?.value || "";
     const payload = { pnr: b.pnr };
     if (contact) payload.contact = contact;
     if (pidVal) payload.passengerId = Number(pidVal);
@@ -559,10 +678,10 @@ function renderBookingDetail(box, b) {
 // STANDBY TAB
 // ======================================================
 
-document.getElementById("standbyBtn").addEventListener("click", async () => {
-  const flightId = document.getElementById("standbyFlightSelect").value;
-  const name = document.getElementById("standbyName").value;
-  const age = Number(document.getElementById("standbyAge").value || 0);
+document.getElementById("standbyBtn")?.addEventListener("click", async () => {
+  const flightId = document.getElementById("standbyFlightSelect")?.value || "";
+  const name = document.getElementById("standbyName")?.value || "";
+  const age = Number(document.getElementById("standbyAge")?.value || 0);
   const { data } = await apiPost("/api/standby", { flightId, name, age });
   showResult(document.getElementById("standbyResult"), "info", data.message);
 });
@@ -571,15 +690,24 @@ document.getElementById("standbyBtn").addEventListener("click", async () => {
 // MANIFEST TAB (staff/demo view)
 // ======================================================
 
-document.getElementById("manifestForm").addEventListener("submit", async (e) => {
+document.getElementById("manifestForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const flightId = document.getElementById("manifestFlightSelect").value;
+
+  if (typeof currentUser === 'undefined' || currentUser.role !== 'staff') {
+    alert("Access denied: Only staff members can view the flight manifest.");
+    return;
+  }
+
+  const flightId = document.getElementById("manifestFlightSelect")?.value || "";
   const data = await apiGet(`/api/manifest?flightId=${encodeURIComponent(flightId)}`);
   const box = document.getElementById("manifestTable");
+  if (!box) return;
+
   if (!data.passengers || data.passengers.length === 0) {
     box.innerHTML = `<div class="empty-state">No confirmed passengers on ${flightId} yet.</div>`;
     return;
   }
+
   const rows = data.passengers.map(p => `
     <tr>
       <td>${p.pnr}</td>
@@ -591,6 +719,7 @@ document.getElementById("manifestForm").addEventListener("submit", async (e) => 
       <td>${money(p.fare)}</td>
     </tr>
   `).join("");
+
   box.innerHTML = `
     <table>
       <thead><tr><th>PNR</th><th>Name</th><th>Age</th><th>Type</th><th>Seat</th><th>Baggage</th><th>Fare</th></tr></thead>
@@ -599,20 +728,148 @@ document.getElementById("manifestForm").addEventListener("submit", async (e) => 
 });
 
 // ======================================================
+// WAITLIST TAB
+// ======================================================
+
+window.waitlistData = window.waitlistData || [];
+
+function renderWaitlistTable() {
+  const container = document.getElementById("waitlistTable");
+  if (!container) return;
+
+  if (window.waitlistData.length === 0) {
+    container.innerHTML = `<div class="empty-state">No waitlist entries yet.</div>`;
+    return;
+  }
+
+  const rows = window.waitlistData.map(item => {
+    const isFullBadge = item.status === 'FULL_WAITLIST'
+      ? `<span class="badge badge--cancelled">PRIORITY</span>`
+      : `<span class="badge badge--confirmed">STANDARD</span>`;
+
+    return `
+      <tr>
+        <td><strong>${item.id}</strong></td>
+        <td>${item.flight}</td>
+        <td>${item.name} (${item.age})</td>
+        <td>${item.dateJoined}</td>
+        <td>${isFullBadge}</td>
+      </tr>
+    `;
+  }).join("");
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Flight</th>
+          <th>Passenger</th>
+          <th>Joined</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function handleWaitlistSubmit(event) {
+  if (event) event.preventDefault();
+
+  const flightSelect = document.getElementById('waitlistFlight') || document.getElementById('standbyFlightSelect');
+  const nameInput = document.getElementById('waitlistName') || document.getElementById('standbyName');
+  const ageInput = document.getElementById('waitlistAge') || document.getElementById('standbyAge');
+  const resultDiv = document.getElementById('waitlistResult') || document.getElementById('standbyResult');
+
+  const flightCode = flightSelect ? flightSelect.value : '';
+  const name = nameInput ? nameInput.value.trim() : '';
+  const age = ageInput ? ageInput.value : '';
+
+  if (!flightCode || !name || !age) {
+    if (resultDiv) {
+      showResult(resultDiv, 'error', 'Please fill in all fields (flight, name, and age).');
+    }
+    return;
+  }
+
+  // Check flight capacity
+  const flights = await apiGet("/api/flights");
+  const selectedFlight = Array.isArray(flights) ? flights.find(f => f.flightId === flightCode) : null;
+  const isFull = selectedFlight ? selectedFlight.occupied >= selectedFlight.capacity : false;
+
+  const entry = {
+    id: 'WL-' + Math.floor(1000 + Math.random() * 9000),
+    flight: flightCode,
+    name,
+    age: parseInt(age, 10),
+    dateJoined: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    status: isFull ? 'FULL_WAITLIST' : 'STANDARD_WAITLIST'
+  };
+
+  window.waitlistData.push(entry);
+  renderWaitlistTable();
+
+  if (resultDiv) {
+    if (isFull) {
+      showResult(
+        resultDiv,
+        'success',
+        `Priority waitlist confirmed for ${flightCode}! Position #${window.waitlistData.length}.`
+      );
+    } else {
+      showResult(
+        resultDiv,
+        'info',
+        `Added to waitlist for ${flightCode} (Position #${window.waitlistData.length}).`
+      );
+    }
+  }
+
+  const form = document.getElementById('waitlistForm');
+  if (form) form.reset();
+}
+// ======================================================
 // INIT
 // ======================================================
 
 async function refreshFlightSelects() {
   const flights = await apiGet("/api/flights");
+  if (!Array.isArray(flights)) return;
   const optionHtml = flights.map(f =>
     `<option value="${f.flightId}">${f.flightId} — ${f.origin}→${f.destination} (${money(f.baseFare)})</option>`
   ).join("");
-  for (const id of ["manifestFlightSelect", "standbyFlightSelect"]) {
-    document.getElementById(id).innerHTML = optionHtml;
+  for (const id of ["manifestFlightSelect", "standbyFlightSelect", "waitlistFlight"]) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<option value="">Select a flight...</option>` + optionHtml;
+  }
+}
+
+function updateNavUI() {
+  const authNav = document.getElementById("authNav");
+  const staffDashboard = document.getElementById("staffDashboard");
+
+  if (authNav && currentUser) {
+    if (currentUser.isLoggedIn) {
+      authNav.innerHTML = `
+        <span class="user-welcome">Welcome, <strong>${currentUser.username}</strong> (${currentUser.role.toUpperCase()})</span>
+        <button onclick="logout()">Logout</button>
+      `;
+    } else {
+      authNav.innerHTML = `
+        <button onclick="openLoginModal('user')">User Login</button>
+        <button onclick="openLoginModal('staff')">Staff Login</button>
+      `;
+    }
+  }
+
+  if (staffDashboard) {
+    staffDashboard.style.display = currentUser.role === "staff" ? "block" : "none";
   }
 }
 
 loadFlights();
 refreshFlightSelects();
 searchWizardFlights();
+renderWaitlistTable();
 goToStep(1);

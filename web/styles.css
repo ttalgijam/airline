@@ -732,3 +732,73 @@ tr:last-child td { border-bottom: none; }
   margin-top: 20px;
   flex-wrap: wrap;
 }
+
+.board {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.75rem 2rem !important;
+}
+
+.board__actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.auth-controls {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.auth-controls button {
+  background: transparent !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  font-size: 0.85rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.auth-controls button:hover {
+  background-color: #ffc107 !important;
+  color: #0b2545 !important;
+  border-color: #ffc107 !important;
+}
+
+/* Restores narrow card box on the left */
+.card--narrow {
+  max-width: 420px !important;
+  margin: 18px 0 !important;
+  text-align: left !important;
+}
+
+/* Stack inputs on top of each other */
+.card--narrow form {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Keep form fields full width inside the box */
+.card--narrow .field {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  margin-bottom: 14px !important;
+}
+
+.card--narrow input,
+.card--narrow select {
+  width: 100% !important;
+}
+
+/* Button fits content on the left side */
+.card--narrow button,
+.card--narrow .btn {
+  width: auto !important;
+  align-self: flex-start !important;
+  margin-top: 6px !important;
+}
