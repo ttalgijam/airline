@@ -407,92 +407,121 @@ tr:last-child td { border-bottom: none; }
 .result.is-error { background: var(--danger-tint-10); border: 1px solid var(--danger); color: var(--danger); }
 .result.is-info { background: var(--surface-2); border: 1px solid var(--line); color: var(--text); }
 
-/* ---------- Seat map (signature element) ---------- */
+/* ---------- Realistic Airplane Cabin & Seat Styling ---------- */
 
-.seatmap__head {
+.airplane-cabin {
+  max-width: 380px;
+  margin: 20px auto;
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: 90px 90px 24px 24px; /* Airplane nose curve */
+  padding: 28px 18px 20px 18px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.plane-cockpit {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px dashed var(--line);
+}
+
+.plane-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: baseline;
   margin-bottom: 12px;
-  flex-wrap: wrap;
+}
+
+.seat-group {
+  display: flex;
   gap: 8px;
 }
 
-.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); font-weight: 600; }
-.legend__item { display: flex; align-items: center; gap: 6px; }
-
-.dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.dot--free { background: var(--surface-2); border: 1px solid var(--line); }
-.dot--taken { background: var(--danger); opacity: 0.6; }
-.dot--pick { background: var(--accent); }
-
-.plane {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  max-height: 480px;
-  overflow-y: auto;
-}
-
-.plane__nose {
+.plane-aisle {
+  width: 32px;
   text-align: center;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  margin-bottom: 10px;
+  font-size: 0.8rem;
   font-weight: 700;
+  color: var(--muted);
+  user-select: none;
 }
 
-.seatgrid {
+.plane-seat {
+  width: 52px;
+  height: 58px;
+  border: 2px solid var(--line);
+  border-radius: 8px 8px 12px 12px;
+  background: var(--surface-2);
   display: flex;
   flex-direction: column;
-  gap: 5px;
   align-items: center;
-}
-
-.seatrow {
-  display: grid;
-  grid-template-columns: 22px repeat(3, 26px) 14px repeat(3, 26px);
-  gap: 4px;
-  align-items: center;
-}
-
-.seatrow__num {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--muted);
-  text-align: right;
-  padding-right: 4px;
-}
-
-.seat {
-  width: 26px;
-  height: 24px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  justify-content: space-between;
+  padding: 4px;
   cursor: pointer;
-  font-size: 0;
+  position: relative;
+  transition: all 0.2s ease;
 }
 
-.seat:hover { border-color: var(--accent-strong); }
+.plane-seat .seat-headrest {
+  width: 70%;
+  height: 10px;
+  background: var(--line);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
 
-.seat.is-taken {
-  background: var(--danger);
-  opacity: 0.55;
+.plane-seat .seat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.plane-seat .pax-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 44px;
+  color: var(--sky);
+}
+
+/* Seat Interactive States */
+.plane-seat:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.plane-seat.is-selected {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.plane-seat.is-selected .seat-headrest {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.plane-seat.is-selected .seat-label,
+.plane-seat.is-selected .pax-tag {
+  color: #ffffff;
+}
+
+.plane-seat:disabled {
+  background: var(--surface-2);
+  border-color: var(--line);
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
-.seat.is-selected {
-  background: var(--accent);
-  border-color: var(--accent-strong);
+.plane-seat:disabled .seat-label {
+  color: var(--muted);
 }
-
-.seat.is-disabled-static { cursor: default; }
-
-.aisle { width: 14px; }
 
 /* ---------- Booking detail card (Manage tab) ---------- */
 
@@ -622,16 +651,22 @@ tr:last-child td { border-bottom: none; }
   font-size: 13px;
 }
 
-.selectable-row {
+/* --- Clickable Flight Table Rows --- */
+.selectable-row,
+.flight-row-selectable {
   cursor: pointer;
+  transition: background-color 0.2s ease, border-left 0.2s ease;
 }
 
-.selectable-row:hover td {
-  background: var(--surface-2);
+.selectable-row:hover td,
+.flight-row-selectable:hover {
+  background-color: var(--accent-tint-08) !important;
 }
 
-.selectable-row.is-selected td {
-  background: var(--accent-tint-08);
+.selectable-row.is-selected td,
+.flight-row-selectable.is-selected {
+  background-color: var(--accent-tint-15) !important;
+  border-left: 4px solid var(--accent);
 }
 
 /* Passenger chips for seat-assignment step */
@@ -801,4 +836,212 @@ tr:last-child td { border-bottom: none; }
   width: auto !important;
   align-self: flex-start !important;
   margin-top: 6px !important;
+}
+
+/* ===================================================
+   LOGIN MODAL STYLES
+   =================================================== */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.is-active,
+.modal[style*="display: block"] {
+  display: flex !important;
+}
+
+/* Corrected target to match class="modal__content" in HTML */
+#loginModal .modal__content,
+.modal__content {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  padding: 36px 32px !important;
+  border-radius: 16px !important;
+  width: 90% !important;
+  max-width: 500px !important;            /* Adjust max width here (e.g., 500px or 550px) */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+  position: relative !important;
+  margin: auto !important;
+}
+
+/* Close button positioning */
+.modal__close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.modal__close:hover {
+  color: var(--text);
+}
+
+/* Stepper Interactivity */
+.stepper .step {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+.stepper .step.is-clickable {
+  cursor: pointer;
+  opacity: 1;
+}
+
+.stepper .step.is-current {
+  opacity: 1;
+  font-weight: bold;
+}
+
+/* Seat Selection Layout */
+.seat-grid-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  max-width: 360px;
+  margin: 16px auto;
+  padding: 16px;
+  background: #f4f6f8;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.seat-btn {
+  padding: 12px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease-in-out;
+}
+
+.seat-btn:hover:not(:disabled) {
+  border-color: #0078ff;
+  color: #0078ff;
+}
+
+.seat-btn.is-selected {
+  background: #28a745;
+  color: #ffffff;
+  border-color: #28a745;
+}
+
+.seat-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+}
+
+/* Baggage Option Cards */
+#baggageList .baggage-card,
+.baggage-card {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 20px !important;
+  margin-bottom: 16px !important;
+}
+
+.baggage-card h4 {
+  color: var(--text) !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.1rem !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.baggage-card label {
+  color: var(--muted) !important;
+  font-size: 0.85rem !important;
+  display: block !important;
+  margin-bottom: 8px !important;
+}
+
+.baggage-card select,
+.pax-baggage-select {
+  width: 100% !important;
+  padding: 10px 14px !important;
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.95rem !important;
+  outline: none;
+  cursor: pointer;
+}
+
+.baggage-card select option,
+.pax-baggage-select option {
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+}
+
+/* Password Field Wrapper & Eye Toggle Button */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-wrapper input {
+  width: 100% !important;
+  padding-right: 42px !important;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--muted);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-toggle-btn:hover {
+  opacity: 0.8;
+}
+
+/* Modal Mode Switch Link */
+.auth-switch-text {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 16px;
+}
+
+.auth-switch-text a {
+  color: var(--sky, #049CDE);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-switch-text a:hover {
+  text-decoration: underline;
+}
+
+/* Input Error Highlighting */
+.input-error {
+  border-color: var(--danger, #E23F3F) !important;
+  background-color: var(--danger-tint-10, rgba(226,63,63,0.09)) !important;
 }

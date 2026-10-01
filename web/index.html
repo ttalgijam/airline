@@ -35,8 +35,7 @@
     <div class="board__clock" id="clock">--:--:--</div>
 
     <div id="authNav" class="auth-controls">
-      <button type="button" onclick="openLoginModal('user')">User Login</button>
-      <button type="button" onclick="openLoginModal('staff')">Staff Login</button>
+      <button type="button" class="btn btn--accent" onclick="openLoginModal()">Login</button>
     </div>
   </div>
 </header>
@@ -194,7 +193,8 @@
       <button type="button" class="btn btn--ghost" id="undoBtn">Undo last cancellation</button>
     </form>
 
-    <div id="bookingDetail"></div>
+    <div id="bookingResult"></div>
+    <div id="recentBookingsList"></div>
   </section>
 
   <!-- STANDBY -->
@@ -207,14 +207,11 @@
   <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start; margin-top: 20px;">
     <!-- LEFT COLUMN: FORM -->
     <div class="card">
-      <form id="waitlistForm" onsubmit="handleWaitlistSubmit(event)">
+      <form id="waitlistForm">
         <div class="field">
           <label for="waitlistFlight">Flight</label>
           <select id="waitlistFlight" required>
             <option value="">Select a flight...</option>
-            <option value="DG6001">DG6001 — Manila (MNL) ➔ Cebu (CEB)</option>
-            <option value="DG6005">DG6005 — Manila (MNL) ➔ Davao (DVO)</option>
-            <option value="5J561">5J561 — Cebu (CEB) ➔ Boracay (MPH)</option>
           </select>
         </div>
 
@@ -237,15 +234,74 @@
 
     <!-- RIGHT COLUMN: WAITLIST LIST DISPLAY -->
     <div class="card">
-      <h3 style="margin-top: 0; margin-bottom: 12px;">Your Waitlist Entries</h3>
-      <div id="waitlistTable">
-        <div class="empty-state">No waitlist entries yet.</div>
-      </div>
+      <h3 style="margin-top: 0; margin-bottom: 12px;">Waitlist Entries</h3>
+      <table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Flight</th>
+            <th>Passenger</th>
+            <th>Time Joined</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="waitlistTableBody">
+          <tr><td colspan="5" class="text-center text-muted p-3">No waitlist entries found.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
 
 </main>
+
+<!-- LOGIN / REGISTER MODAL -->
+<div id="loginModal" class="modal">
+  <div class="modal__content card">
+    <span class="modal__close" onclick="closeLoginModal()">&times;</span>
+    <h2 id="modalTitle">Login</h2>
+
+    <!-- LOGIN FORM -->
+    <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+      <div class="field">
+        <label for="loginUsername">Username</label>
+        <input type="text" id="loginUsername" placeholder="Enter username" required />
+      </div>
+      <div class="field">
+        <label for="loginPassword">Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="loginPassword" placeholder="Enter password" required />
+          <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('loginPassword', this)" title="Toggle password view">👁️</button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn--accent" style="width: 100%; margin-top: 12px;">Sign In</button>
+    </form>
+
+    <!-- REGISTER FORM -->
+    <form id="registerForm" onsubmit="handleRegisterSubmit(event)" style="display: none;">
+      <div class="field">
+        <label for="regUsername">Username</label>
+        <input type="text" id="regUsername" placeholder="Choose a username" required />
+      </div>
+      <div class="field">
+        <label for="regPassword">Password</label>
+        <div class="password-wrapper">
+          <input type="password" id="regPassword" placeholder="Create a password" required />
+          <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('regPassword', this)" title="Toggle password view">👁️</button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn--accent" style="width: 100%; margin-top: 12px;">Create Account</button>
+    </form>
+
+    <!-- AUTH MODE TOGGLE LINK -->
+    <p id="authSwitchPrompt" class="auth-switch-text">
+      Don't have an account? <a href="#" onclick="switchAuthMode('register'); return false;">Sign Up</a>
+    </p>
+
+    <!-- RESULT & ERROR FEEDBACK -->
+    <div id="loginResult" class="result" style="margin-top: 12px;"></div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
