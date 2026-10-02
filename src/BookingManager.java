@@ -297,29 +297,28 @@ public class BookingManager {
         return "Restored booking " + b.getPnr() + ".";
     }
 
-    /** displayManifest(): tabular list of all confirmed passengers on a flight. */
-    public String displayManifest(String flightId, User requester) {
-        if (requester == null || !"STAFF".equalsIgnoreCase(requester.getRole())) {
-            return "Access denied: Staff permission required.";
-        }
+/** displayManifest(): tabular list of all confirmed passengers on a flight. */
+    public String displayManifest(String flightId) {
+        Flight f = findFlightById(flightId);
+        if (f == null) return "Flight " + flightId + " not found.";
 
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("Manifest for Flight %s%n", flightId));
         sb.append(String.format("%-6s %-20s %-5s %-6s %-6s %-8s %-8s%n",
                 "PNR", "Name", "Age", "Type", "Seat", "Bag(kg)", "Fare(₱)"));
 
-        for (Booking b : bookings.values()) {
-            if (b.getFlightId().equalsIgnoreCase(flightId) && "CONFIRMED".equals(b.getStatus())) {
+        for (Booking b : bookings) {
+            if (b.getFlightId().equalsIgnoreCase(flightId) && b.getStatus() == Booking.Status.CONFIRMED) {
                 for (Passenger p : b.getPassengers()) {
                     sb.append(String.format("%-6s %-20s %-5d %-6s %-6s %-8.1f ₱%-7.2f%n",
-                            b.getPnr(), p.getName(), p.getAge(), p.getType(),
-                            p.getSeatNumber(), p.getBaggageWeight(), b.getTotalFare()));
+                            b.getPnr(), p.getFullName(), p.getAge(), p.getType(),
+                            p.getAssignedSeat() != null ? p.getAssignedSeat() : "-",
+                            p.getBaggageWeightKg(), p.calculateFare(f.getBaseFare())));
                 }
             }
         }
         return sb.toString();
     }
-
     /** Joins the standby queue for a full flight. */
     public String joinStandby(String flightId, String name, int age) {
         Flight f = findFlightById(flightId);

@@ -41,10 +41,11 @@
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab" data-tab="flights">Browse Flights</button>
-  <button class="tab is-active" data-tab="book">Book a Flight</button>
-  <button class="tab" data-tab="manage">My Booking</button>
-  <button class="tab" data-tab="standby">Waitlist</button>
+  <button id="navBrowse" class="tab nav-btn" data-tab="flights">Browse Flights</button>
+  <button id="navBook" class="tab nav-btn is-active" data-tab="book">Book a Flight</button>
+  <button id="navMyBooking" class="tab nav-btn" data-tab="manage">My Booking</button>
+  <button id="navWaitlist" class="tab nav-btn" data-tab="standby">Waitlist</button>
+  <button id="navAdmin" class="tab nav-btn admin-only" data-tab="admin" style="display: none;">⚙ Admin Dashboard</button>
 </nav>
 
 <main class="app">
@@ -151,7 +152,7 @@
     <div class="wizard-step" data-step="4">
       <div class="card">
         <h2>Step 4 — Baggage</h2>
-        <p class="sub">First 20kg is free per passenger. Extra weight is billed at ₱5/kg.</p>
+        <p class="sub">7 kg Cabin Baggage is included free with every ticket. Additional check-in baggage allowances can be selected below.</p>
         <div id="baggageList"></div>
       </div>
       <div class="wizard-nav">
@@ -188,7 +189,7 @@
     </div>
 
     <form class="filterbar" id="pnrLookupForm">
-      <input type="text" id="pnrInput" placeholder="PNR e.g. 7F3K9Q" maxlength="6" style="text-transform:uppercase">
+      <input type="text" id="pnrInput" placeholder="PNR e.g. TRV-7F3K9Q" maxlength="10" style="text-transform:uppercase">
       <button type="submit" class="btn btn--accent">Look up</button>
       <button type="button" class="btn btn--ghost" id="undoBtn">Undo last cancellation</button>
     </form>
@@ -198,60 +199,99 @@
   </section>
 
   <!-- STANDBY -->
-<section class="panel" id="panel-standby">
-  <div class="panel__head">
-    <h1>Join the waitlist</h1>
-    <p class="sub">For flights that are fully booked — you'll be offered a seat in the order you joined.</p>
-  </div>
-
-  <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start; margin-top: 20px;">
-    <!-- LEFT COLUMN: FORM -->
-    <div class="card">
-      <form id="waitlistForm">
-        <div class="field">
-          <label for="waitlistFlight">Flight</label>
-          <select id="waitlistFlight" required>
-            <option value="">Select a flight...</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="waitlistName">Your name</label>
-          <input type="text" id="waitlistName" placeholder="e.g. Juan Cruz" required />
-        </div>
-
-        <div class="field">
-          <label for="waitlistAge">Age</label>
-          <input type="number" id="waitlistAge" min="1" max="120" placeholder="e.g. 25" required />
-        </div>
-
-        <button type="submit" class="btn btn--accent">Join waitlist</button>
-      </form>
-
-      <!-- Feedback message area -->
-      <div id="waitlistResult" class="result" style="margin-top: 14px;"></div>
+  <section class="panel" id="panel-standby">
+    <div class="panel__head">
+      <h1>Join the waitlist</h1>
+      <p class="sub">For flights that are fully booked — you'll be offered a seat in the order you joined.</p>
     </div>
 
-    <!-- RIGHT COLUMN: WAITLIST LIST DISPLAY -->
-    <div class="card">
-      <h3 style="margin-top: 0; margin-bottom: 12px;">Waitlist Entries</h3>
-      <table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Flight</th>
-            <th>Passenger</th>
-            <th>Time Joined</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="waitlistTableBody">
-          <tr><td colspan="5" class="text-center text-muted p-3">No waitlist entries found.</td></tr>
-        </tbody>
-      </table>
+    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start; margin-top: 20px;">
+      <!-- LEFT COLUMN: FORM -->
+      <div class="card">
+        <form id="waitlistForm">
+          <div class="field">
+            <label for="waitlistFlight">Flight</label>
+            <select id="waitlistFlight" required>
+              <option value="">Select a flight...</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="waitlistName">Your name</label>
+            <input type="text" id="waitlistName" placeholder="e.g. Juan Cruz" required />
+          </div>
+
+          <div class="field">
+            <label for="waitlistAge">Age</label>
+            <input type="number" id="waitlistAge" min="1" max="120" placeholder="e.g. 25" required />
+          </div>
+
+          <button type="submit" class="btn btn--accent">Join waitlist</button>
+        </form>
+
+        <!-- Feedback message area -->
+        <div id="waitlistResult" class="result" style="margin-top: 14px;"></div>
+      </div>
+
+      <!-- RIGHT COLUMN: WAITLIST LIST DISPLAY -->
+      <div class="card">
+        <h3 style="margin-top: 0; margin-bottom: 12px;">Waitlist Entries</h3>
+        <table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Flight</th>
+              <th>Passenger</th>
+              <th>Time Joined</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="waitlistTableBody">
+            <tr><td colspan="5" class="text-center text-muted p-3">No waitlist entries found.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
+
+  <section class="panel" id="panel-admin">
+    <div class="panel__head">
+      <h1 style="color: #dc3545;">⚙ Admin Operations & Flight Manifest Control</h1>
+      <p class="sub">Monitor live flight statuses, inspect passenger manifests, manage bookings, and approve waitlist queues.</p>
+    </div>
+
+    <!-- ADMIN METRICS OVERVIEW -->
+    <div id="adminMetricsSummary" style="margin-bottom: 24px;"></div>
+
+    <!-- SECTION 1: LIVE FLIGHT MONITORING & STATUS UPDATER -->
+    <div class="card" style="margin-bottom: 24px;">
+      <h2>1. Live Flight Status Monitor</h2>
+      <p class="sub">Update real-time flight progress: Delayed, Near Boarding, Boarding, or Flown.</p>
+      <div id="adminFlightMonitorTable"></div>
+    </div>
+
+    <!-- SECTION 2: PASSENGER MANIFEST & BOOKING CONTROL -->
+    <div class="card" style="margin-bottom: 24px;">
+      <h2>2. Flight Passenger Manifest</h2>
+      <div class="filterbar" style="margin-bottom: 16px;">
+        <label for="adminManifestFlightSelect" style="font-weight: bold; margin-right: 8px;">Select Flight Manifest:</label>
+        <select id="adminManifestFlightSelect" onchange="renderAdminManifest(this.value)">
+          <option value="">-- Select Flight --</option>
+        </select>
+        <button type="button" class="btn btn--accent" onclick="openAdminAddBookingModal()">+ Add New Booking for User</button>
+      </div>
+      <div id="adminManifestContainer">
+        <div class="empty-state">Select a flight above to view its passenger manifest.</div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: PRIORITY WAITLIST APPROVAL STATION -->
+    <div class="card">
+      <h2>3. Waitlist Queue & Auto-Priority Approval</h2>
+      <p class="sub">Waitlisted passengers sorted chronologically (First-In, First-Out by time joined). Approve to allocate available seats.</p>
+      <div id="adminWaitlistApprovalContainer"></div>
+    </div>
+  </section>
 
 </main>
 
@@ -300,6 +340,42 @@
 
     <!-- RESULT & ERROR FEEDBACK -->
     <div id="loginResult" class="result" style="margin-top: 12px;"></div>
+  </div>
+</div>
+
+<div id="adminAddBookingModal" class="modal">
+  <div class="modal__content card">
+    <span class="modal__close" onclick="closeAdminAddBookingModal()">&times;</span>
+    <h2>Add Manual Booking (Admin Override)</h2>
+    <form id="adminAddBookingForm" onsubmit="handleAdminAddBookingSubmit(event)">
+      <div class="field">
+        <label for="adminBookFlight">Target Flight</label>
+        <select id="adminBookFlight" required></select>
+      </div>
+      <div class="field">
+        <label for="adminBookUsername">Account Username</label>
+        <input type="text" id="adminBookUsername" placeholder="e.g. passenger or guest" required />
+      </div>
+      <div class="field">
+        <label for="adminBookContact">Contact Email/Phone</label>
+        <input type="text" id="adminBookContact" placeholder="e.g. user@domain.com" required />
+      </div>
+      <div class="field">
+        <label for="adminBookPaxName">Passenger Full Name</label>
+        <input type="text" id="adminBookPaxName" placeholder="e.g. Maria Santos" required />
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div class="field" style="flex: 1;">
+          <label for="adminBookAge">Age</label>
+          <input type="number" id="adminBookAge" value="28" min="1" max="120" required />
+        </div>
+        <div class="field" style="flex: 1;">
+          <label for="adminBookSeat">Preferred Seat Code</label>
+          <input type="text" id="adminBookSeat" placeholder="e.g. 4A" required />
+        </div>
+      </div>
+      <button type="submit" class="btn btn--accent" style="width: 100%; margin-top: 12px;">Confirm & Issue Booking</button>
+    </form>
   </div>
 </div>
 

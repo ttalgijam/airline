@@ -1045,3 +1045,210 @@ tr:last-child td { border-bottom: none; }
   border-color: var(--danger, #E23F3F) !important;
   background-color: var(--danger-tint-10, rgba(226,63,63,0.09)) !important;
 }
+
+/* admin */
+.badge--status-scheduled { background: rgba(4, 156, 222, 0.15); color: #049CDE; }
+.badge--status-near_boarding { background: rgba(255, 193, 7, 0.2); color: #B8860B; }
+.badge--status-boarding { background: rgba(40, 167, 69, 0.2); color: #28a745; font-weight: bold; }
+.badge--status-delayed { background: rgba(226, 63, 63, 0.2); color: #E23F3F; font-weight: bold; }
+.badge--status-flown { background: rgba(100, 116, 139, 0.2); color: #64748B; }
+
+.manifest-header-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
+
+.admin-only {
+  border-left: 3px solid #dc3545 !important;
+}
+
+/* ADMIN DASHBOARD STYLES */
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1a202c;
+  color: #ffffff;
+  padding: 16px 32px;
+  border-bottom: 3px solid #3182ce;
+}
+
+.badge-admin {
+  background-color: #e53e3e;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+.admin-container {
+  display: flex;
+  min-height: calc(100vh - 70px);
+}
+
+.admin-sidebar {
+  width: 240px;
+  background-color: #2d3748;
+  padding: 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-nav-btn {
+  background: transparent;
+  color: #cbd5e0;
+  border: none;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-nav-btn:hover {
+  background-color: #4a5568;
+  color: #ffffff;
+}
+
+.admin-nav-btn.active {
+  background-color: #3182ce;
+  color: #ffffff;
+}
+
+.admin-main-content {
+  flex: 1;
+  padding: 32px;
+  background-color: #f7fafc;
+}
+
+.btn-logout {
+  background-color: #e53e3e;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-logout:hover {
+  background-color: #c53030;
+}
+
+th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Modal Styling */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal.is-active {
+  display: flex;
+}
+.modal__content {
+  position: relative;
+  max-width: 450px;
+  width: 90%;
+}
+.modal__close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* Password Toggle Wrapper */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-wrapper input {
+  width: 100%;
+  padding-right: 40px;
+}
+.password-toggle-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Status Badges */
+.badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+}
+.badge--status-scheduled { background: var(--surface-2); color: var(--text); }
+.badge--status-near_boarding { background: var(--accent-tint-15); color: var(--accent-contrast); }
+.badge--status-boarding { background: var(--ok-tint-15); color: var(--ok); }
+.badge--status-delayed { background: var(--danger-tint-15); color: var(--danger); }
+.badge--status-flown { background: var(--surface-2); color: var(--muted); }
+
+/* Airplane Cabin & Seat Map */
+.airplane-cabin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+.plane-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.seat-group {
+  display: flex;
+  gap: 6px;
+}
+.plane-seat {
+  width: 44px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+.plane-seat.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent-strong);
+}
+.plane-seat:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}

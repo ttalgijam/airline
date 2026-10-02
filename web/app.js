@@ -1,13 +1,14 @@
 /* ==========================================================================
-   TERRAVA AIRWAYS - MAIN APPLICATION LOGIC (app_2.js)
+   TERRAVA AIRWAYS - MAIN APPLICATION LOGIC (AUTO-NAV & ROLE-BASED ROUTING)
    ========================================================================== */
 
 const STORAGE_BOOKINGS = "terrava_bookings";
 const STORAGE_WAITLIST = "terrava_waitlist";
 const STORAGE_LAST_CANCELLED = "terrava_last_cancelled";
 const STORAGE_USERS = "terrava_registered_users";
+const STORAGE_FLIGHT_STATUSES = "terrava_flight_statuses";
 
-// Helper function to format date string into Month-First format (e.g., "October 15, 2026")
+// Helper function to format date string into Month-First format
 function formatDateMonthFirst(dateStr) {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
@@ -17,9 +18,6 @@ function formatDateMonthFirst(dateStr) {
   const monthIdx = parseInt(parts[1], 10) - 1;
   const day = parseInt(parts[2], 10);
   
-  const months = [
-    "October 15, 2026"
-  ]; // standard month list index
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -141,6 +139,60 @@ function initDefaultUsers() {
   }
 }
 
+// --- CENTRALIZED TAB SWITCH ENGINE ---
+function switchTab(targetTab) {
+  const tabs = document.querySelectorAll(".tabs .tab, .tab");
+  const panels = document.querySelectorAll(".panel");
+
+  tabs.forEach(t => {
+    if (t.getAttribute("data-tab") === targetTab) {
+      t.classList.add("is-active");
+    } else {
+      t.classList.remove("is-active");
+    }
+  });
+
+  panels.forEach(p => {
+    if (p.id === `panel-${targetTab}`) {
+      p.classList.add("is-active");
+    } else {
+      p.classList.remove("is-active");
+    }
+  });
+
+  if (targetTab === "flights") renderBrowseFlights();
+  if (targetTab === "standby") {
+    populateWaitlistDropdown();
+    renderWaitlistTable();
+  }
+  if (targetTab === "manage") renderRecentBookings();
+  if (targetTab === "admin") renderAdminDashboard();
+}
+
+// --- CENTRAL UI REFRESH ENGINE ---
+function refreshAllUI() {
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser && (currentUser.role === "admin" || currentUser.username === "admin");
+
+  updateNavigationForRole(currentUser);
+  updateAuthUI();
+
+  // Guard: If a non-admin is currently viewing the admin panel, kick them back to 'book' view
+  const activePanel = document.querySelector(".panel.is-active");
+  if (!isAdmin && activePanel && activePanel.id === "panel-admin") {
+    switchTab("book");
+  }
+
+  renderBrowseFlights();
+  renderWizardFlights();
+  renderRecentBookings();
+  renderWaitlistTable();
+
+  if (isAdmin) {
+    renderAdminDashboard();
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
   initTabs();
@@ -149,14 +201,29 @@ document.addEventListener("DOMContentLoaded", () => {
   initManageBooking();
   initWaitlist();
   initModalListeners();
-
   initDefaultUsers();
-  updateAuthUI();
 
-  renderBrowseFlights();
-  renderWizardFlights();
-  renderRecentBookings();
-  renderWaitlistTable();
+  document.getElementById("adminAddBookingForm")?.addEventListener("submit", handleAdminAddBookingSubmit);
+
+  // Initial render & initial role-based routing check
+  refreshAllUI();
+  const initialUser = getCurrentUser();
+  if (initialUser && (initialUser.role === "admin" || initialUser.username === "admin")) {
+    switchTab("admin");
+  } else {
+    const activePanel = document.querySelector(".panel.is-active");
+    if (!activePanel) switchTab("book");
+  }
+
+  // 1. Live Background Polling
+  setInterval(() => {
+    refreshAllUI();
+  }, 5000);
+
+  // 2. Multi-Tab Storage Event Sync
+  window.addEventListener("storage", () => {
+    refreshAllUI();
+  });
 });
 
 // --- 1. CLOCK & THEME ---
@@ -171,12 +238,33 @@ function initClock() {
   setInterval(update, 1000);
 }
 
+// Toggle between light and dark modes
 function toggleTheme() {
-  const current = document.documentElement.getAttribute("data-theme") || "light";
-  const next = current === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  localStorage.setItem("terrava-theme", next);
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+
+  // Apply new theme and save preference
+  document.documentElement.setAttribute("data-theme", newTheme);
+  localStorage.setItem("terrava-theme", newTheme);
+
+  // Update button icon
+  updateThemeIcon(newTheme);
 }
+
+// Update the theme toggle button icon
+function updateThemeIcon(theme) {
+  const btn = document.getElementById("themeToggle");
+  if (!btn) return;
+  
+  // Show Sun ☀️ in Dark Mode (to switch to light), Moon 🌙 in Light Mode (to switch to dark)
+  btn.textContent = theme === "dark" ? "☀️" : "🌙";
+}
+
+// Sync button icon on initial page load
+document.addEventListener("DOMContentLoaded", () => {
+  const activeTheme = document.documentElement.getAttribute("data-theme") || "light";
+  updateThemeIcon(activeTheme);
+});
 
 // --- 2. AUTHENTICATION & PRIVACY RESET LOGIC ---
 function clearSessionUI() {
@@ -203,62 +291,41 @@ function clearSessionUI() {
 
 function updateAuthUI() {
   const authNav = document.getElementById("authNav");
-  if (!authNav) return;
-
   const savedUser = getCurrentUser();
 
-  if (savedUser && savedUser.username) {
-    const roleBadge = savedUser.role === 'admin' 
-      ? `<span style="background:#dc3545; color:white; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:6px;">ADMIN</span>` 
-      : `<span style="background:var(--accent); color:white; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:6px;">PASSENGER</span>`;
+  if (authNav) {
+    if (savedUser && savedUser.username) {
+      const roleBadge = savedUser.role === 'admin' || savedUser.username === 'admin'
+        ? `<span style="background:#dc3545; color:white; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:6px;">ADMIN</span>` 
+        : `<span style="background:var(--accent); color:white; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:6px;">PASSENGER</span>`;
 
-    authNav.innerHTML = `
-      ${roleBadge}
-      <span style="color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-right: 8px;">👤 ${savedUser.username}</span>
-      <button type="button" class="btn btn--ghost" onclick="handleLogout()">Logout</button>
-    `;
-  } else {
-    authNav.innerHTML = `
-      <button type="button" class="btn btn--accent" onclick="openLoginModal()">Login</button>
-    `;
+      authNav.innerHTML = `
+        ${roleBadge}
+        <span style="color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-right: 8px;">👤 ${savedUser.username}</span>
+        <button type="button" class="btn btn--ghost" onclick="handleLogout()">Logout</button>
+      `;
+    } else {
+      authNav.innerHTML = `
+        <button type="button" class="btn btn--accent" onclick="openLoginModal()">Login</button>
+      `;
+    }
   }
-
-  renderRecentBookings();
-  renderWaitlistTable();
 }
 
 function handleLogout() {
   localStorage.removeItem("terrava_user");
   clearSessionUI();
-  updateAuthUI();
-  renderBrowseFlights();
-  renderWizardFlights();
+  refreshAllUI();
+  switchTab("book"); // Immediately switch back to default client view ("Book a flight")
 }
 
 // --- 3. NAVIGATION TABS ---
 function initTabs() {
-  const tabs = document.querySelectorAll(".tabs .tab");
-  const panels = document.querySelectorAll(".panel");
-
+  const tabs = document.querySelectorAll(".tabs .tab, .tab");
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       const targetTab = tab.getAttribute("data-tab");
-
-      tabs.forEach(t => t.classList.remove("is-active"));
-      panels.forEach(p => p.classList.remove("is-active"));
-
-      tab.classList.add("is-active");
-      const targetPanel = document.getElementById(`panel-${targetTab}`);
-      if (targetPanel) targetPanel.classList.add("is-active");
-
-      if (targetTab === "flights") renderBrowseFlights();
-      if (targetTab === "standby") {
-        populateWaitlistDropdown();
-        renderWaitlistTable();
-      }
-      if (targetTab === "manage") {
-        renderRecentBookings();
-      }
+      if (targetTab) switchTab(targetTab);
     });
   });
 }
@@ -342,7 +409,6 @@ function renderBrowseFlights(originFilter = "", destFilter = "") {
   container.innerHTML = html;
 }
 
-// IN-DEPTH FLIGHT DETAILS MODAL
 function openFlightDetailsModal(flightId) {
   const flight = FLIGHT_DATABASE.find(f => f.flightId === flightId);
   if (!flight) return;
@@ -429,21 +495,17 @@ function openFlightDetailsModal(flightId) {
 
 function closeFlightDetailsModal() {
   const modal = document.getElementById("flightDetailsModal");
-  if (modal) {
-    modal.style.display = "none";
-  }
+  if (modal) modal.style.display = "none";
 }
 
 function switchToWaitlist(flightId) {
-  const waitlistTab = document.querySelector('.tab[data-tab="standby"]');
-  if (waitlistTab) waitlistTab.click();
+  switchTab("standby");
   const select = document.getElementById("waitlistFlight");
   if (select) select.value = flightId;
 }
 
 function startBookingFlight(flightId) {
-  const bookTab = document.querySelector('.tab[data-tab="book"]');
-  if (bookTab) bookTab.click();
+  switchTab("book");
   selectWizardFlight(flightId);
 }
 
@@ -651,8 +713,6 @@ function generatePassengerFields() {
 
 function handleStep2Submit() {
   const contact = document.getElementById("wContact")?.value.trim();
-  const nameInputs = document.querySelectorAll(".pax-name-input");
-  const ageInputs = document.querySelectorAll(".pax-age-input");
   const errorDiv = document.getElementById("step2Error");
 
   if (!contact) {
@@ -660,9 +720,8 @@ function handleStep2Submit() {
     return;
   }
 
-  if (nameInputs.length === 0) {
-    generatePassengerFields();
-  }
+  const nameInputs = document.querySelectorAll(".pax-name-input");
+  if (nameInputs.length === 0) generatePassengerFields();
 
   const updatedNames = document.querySelectorAll(".pax-name-input");
   const updatedAges = document.querySelectorAll(".pax-age-input");
@@ -714,7 +773,22 @@ function renderSeatMap() {
   `).join("");
 
   const rows = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  const occupiedSeats = ["1A", "2C", "3B", "5D", "7A", "8C", "10B", "11D"]; 
+  const flight = bookingWizardState.selectedFlight;
+  const hardcodedOccupied = ["1A", "2C", "3B", "5D", "7A", "8C", "10B", "11D"];
+  const bookedSeats = [];
+
+  if (flight) {
+    const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+    bookings
+      .filter(b => b.flightId === flight.flightId && b.status !== "CANCELLED")
+      .forEach(b => {
+        (b.passengers || []).forEach(p => {
+          if (p.seat) bookedSeats.push(p.seat);
+        });
+      });
+  }
+
+  const occupiedSeats = Array.from(new Set([...hardcodedOccupied, ...bookedSeats]));
 
   let cabinHtml = `
     <div class="airplane-cabin">
@@ -722,8 +796,7 @@ function renderSeatMap() {
   `;
 
   rows.forEach(r => {
-    cabinHtml += `<div class="plane-row">`;
-    cabinHtml += `<div class="seat-group">`;
+    cabinHtml += `<div class="plane-row"><div class="seat-group">`;
     ["A", "B"].forEach(col => {
       const seatCode = `${r}${col}`;
       const isOccupied = occupiedSeats.includes(seatCode);
@@ -739,11 +812,7 @@ function renderSeatMap() {
           <span class="pax-tag">${assignedPax ? assignedPax.name.split(' ')[0] : (isOccupied ? 'X' : '')}</span>
         </button>`;
     });
-    cabinHtml += `</div>`;
-
-    cabinHtml += `<div class="plane-aisle">${r}</div>`;
-
-    cabinHtml += `<div class="seat-group">`;
+    cabinHtml += `</div><div class="plane-aisle">${r}</div><div class="seat-group">`;
     ["C", "D"].forEach(col => {
       const seatCode = `${r}${col}`;
       const isOccupied = occupiedSeats.includes(seatCode);
@@ -759,9 +828,7 @@ function renderSeatMap() {
           <span class="pax-tag">${assignedPax ? assignedPax.name.split(' ')[0] : (isOccupied ? 'X' : '')}</span>
         </button>`;
     });
-    cabinHtml += `</div>`;
-
-    cabinHtml += `</div>`;
+    cabinHtml += `</div></div>`;
   });
 
   cabinHtml += `
@@ -893,9 +960,7 @@ function renderReviewSummary() {
             <th style="text-align:center;">Subtotal</th>
           </tr>
         </thead>
-        <tbody>
-          ${paxTableRows}
-        </tbody>
+        <tbody>${paxTableRows}</tbody>
       </table>
 
       <h3 style="text-align: right; margin-top: 16px; color: var(--accent);">Total Fare: ₱${totalFare.toLocaleString()}</h3>
@@ -923,9 +988,7 @@ function handleFinalBookingSubmit() {
   existingBookings.unshift(newBooking);
   localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(existingBookings));
 
-  renderBrowseFlights();
-  renderWizardFlights();
-  renderRecentBookings();
+  refreshAllUI();
 
   const card = document.getElementById("confirmationCard");
   if (card) {
@@ -947,8 +1010,7 @@ function handleFinalBookingSubmit() {
 }
 
 function viewBookingDetails(pnr) {
-  const manageTab = document.querySelector('.tab[data-tab="manage"]');
-  if (manageTab) manageTab.click();
+  switchTab("manage");
   const input = document.getElementById("pnrInput");
   if (input) input.value = pnr;
   lookupPNR(pnr);
@@ -1051,11 +1113,8 @@ function cancelPNRBooking(pnr) {
     localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
     localStorage.setItem(STORAGE_LAST_CANCELLED, JSON.stringify(booking));
 
-    renderBrowseFlights();
-    renderWizardFlights();
-
+    refreshAllUI();
     lookupPNR(pnr);
-    renderRecentBookings();
   }
 }
 
@@ -1075,12 +1134,9 @@ function undoLastCancellation() {
     localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
     localStorage.removeItem(STORAGE_LAST_CANCELLED);
 
-    renderBrowseFlights();
-    renderWizardFlights();
-
+    refreshAllUI();
     alert(`Restored booking ${lastBooking.pnr}!`);
     lookupPNR(lastBooking.pnr);
-    renderRecentBookings();
   }
 }
 
@@ -1091,8 +1147,7 @@ function renderRecentBookings() {
   const savedUser = getCurrentUser();
   const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
 
-  // MODE A: ADMIN DASHBOARD
-  if (savedUser && savedUser.role === 'admin') {
+  if (savedUser && (savedUser.role === 'admin' || savedUser.username === 'admin')) {
     const totalRevenue = bookings
       .filter(b => b.status !== "CANCELLED")
       .reduce((sum, b) => sum + (b.totalFare || 0), 0);
@@ -1152,7 +1207,6 @@ function renderRecentBookings() {
     return;
   }
 
-  // MODE B: LOGGED-IN PASSENGER ("MY TRIPS")
   if (savedUser) {
     const userBookings = bookings.filter(b => b.username === savedUser.username);
 
@@ -1184,7 +1238,6 @@ function renderRecentBookings() {
     return;
   }
 
-  // MODE C: UNAUTHENTICATED GUEST VIEW
   container.innerHTML = `
     <div class="card" style="margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.02);">
       <h3>💡 Traveling as a Guest?</h3>
@@ -1220,10 +1273,10 @@ function promptClaimBooking() {
   target.username = savedUser.username;
   localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
   alert(`✔ Booking ${target.pnr} successfully claimed and added to your My Trips dashboard!`);
-  renderRecentBookings();
+  refreshAllUI();
 }
 
-// --- 7. ACCOUNT-CENTRALIZED WAITLIST ---
+// --- 7. WAITLIST MANAGEMENT ---
 function initWaitlist() {
   document.getElementById("waitlistForm")?.addEventListener("submit", handleWaitlistSubmit);
 }
@@ -1266,6 +1319,7 @@ function handleWaitlistSubmit(event) {
     flight: flightCode,
     name: name,
     age: parseInt(age, 10),
+    timestamp: Date.now(),
     joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     status: isFull ? "FULL_WAITLIST" : "STANDARD_WAITLIST"
   };
@@ -1273,30 +1327,25 @@ function handleWaitlistSubmit(event) {
   currentWaitlist.push(entry);
   localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(currentWaitlist));
 
-  renderWaitlistTable();
+  refreshAllUI();
 
-  if (resultDiv) {
-    resultDiv.innerHTML = `<span style="color:green;">✔ Joined waitlist for ${flightCode}! ID: ${entry.id}</span>`;
+if (resultDiv) {
+    resultDiv.innerHTML = `<span style="color:green; font-weight:bold;">✔ Added to waitlist under Request ID: ${entry.id}</span>`;
   }
 
+  renderWaitlistTable();
   document.getElementById("waitlistForm")?.reset();
 }
 
-function deleteWaitlistEntry(id) {
-  let currentWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
-  currentWaitlist = currentWaitlist.filter(w => w.id !== id);
-  localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(currentWaitlist));
-  renderWaitlistTable();
-}
-
 function renderWaitlistTable() {
-  const container = document.getElementById("waitlistTable") || document.getElementById("waitlistTableBody");
+  const container = document.getElementById("waitlistTable") || document.getElementById("waitlistTableBody")?.closest('.card');
   if (!container) return;
 
   const savedUser = getCurrentUser();
   const allWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
 
-  if (savedUser && savedUser.role === 'admin') {
+  // Admin View
+  if (savedUser && (savedUser.role === 'admin' || savedUser.username === 'admin')) {
     if (allWaitlist.length === 0) {
       container.innerHTML = `<p class="p-3" style="color: var(--muted);">No waitlist entries in system.</p>`;
       return;
@@ -1335,6 +1384,7 @@ function renderWaitlistTable() {
     return;
   }
 
+  // Passenger / Guest View
   const userWaitlist = allWaitlist.filter(w => {
     if (savedUser) return w.username === savedUser.username;
     return w.username === "guest";
@@ -1373,6 +1423,39 @@ function renderWaitlistTable() {
 
   html += `</tbody></table></div>`;
   container.innerHTML = html;
+}
+
+function updateNavigationForRole(user) {
+  const navBrowse = document.getElementById("navBrowse");
+  const navBook = document.getElementById("navBook");
+  const navMyBooking = document.getElementById("navMyBooking");
+  const navWaitlist = document.getElementById("navWaitlist");
+  const navAdmin = document.getElementById("navAdmin");
+  const adminTab = document.getElementById("adminTab");
+
+  const isAdmin = user && (user.role === "admin" || user.username === "admin");
+
+  const passengerNavs = [navBrowse, navBook, navMyBooking, navWaitlist];
+  passengerNavs.forEach((el) => {
+    if (el) el.style.display = isAdmin ? "none" : "";
+  });
+
+  // Handle single Admin tab display to prevent duplicates
+  if (navAdmin) navAdmin.style.display = isAdmin ? "" : "none";
+  if (adminTab) {
+    if (navAdmin) {
+      adminTab.style.display = "none";
+    } else {
+      adminTab.style.display = isAdmin ? "" : "none";
+    }
+  }
+}
+
+function deleteWaitlistEntry(id) {
+  let currentWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+  currentWaitlist = currentWaitlist.filter(w => w.id !== id);
+  localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(currentWaitlist));
+  refreshAllUI();
 }
 
 // --- 8. LOGIN & REGISTER MODAL LOGIC ---
@@ -1472,7 +1555,14 @@ function handleLoginSubmit(e) {
     }));
 
     clearSessionUI();
-    updateAuthUI();
+    refreshAllUI();
+
+    // Auto-route active tab immediately based on logged-in user role
+    if (registeredMatch.role === "admin" || registeredMatch.username === "admin") {
+      switchTab("admin");
+    } else {
+      switchTab("book");
+    }
 
     if (resultDiv) {
       resultDiv.style.display = "block";
@@ -1483,7 +1573,7 @@ function handleLoginSubmit(e) {
     setTimeout(() => {
       closeLoginModal();
       document.getElementById("loginForm")?.reset();
-    }, 1000);
+    }, 800);
   } else {
     if (userInput) userInput.classList.add("input-error");
     if (passInput) passInput.classList.add("input-error");
@@ -1527,7 +1617,8 @@ function handleRegisterSubmit(e) {
   localStorage.setItem("terrava_user", JSON.stringify({ username: newUser.username, role: newUser.role }));
 
   clearSessionUI();
-  updateAuthUI();
+  refreshAllUI();
+  switchTab("book");
 
   if (resultDiv) {
     resultDiv.style.display = "block";
@@ -1538,5 +1629,396 @@ function handleRegisterSubmit(e) {
   setTimeout(() => {
     closeLoginModal();
     document.getElementById("registerForm")?.reset();
-  }, 1200);
+  }, 1000);
+}
+
+// --- 9. ADMIN DASHBOARD & MONITORING EXTENSIONS ---
+function getFlightStatuses() {
+  const saved = localStorage.getItem(STORAGE_FLIGHT_STATUSES);
+  if (saved) return JSON.parse(saved);
+
+  const initialStatuses = {
+    "TRV-101": { status: "SCHEDULED", delayReason: "" },
+    "TRV-102": { status: "NEAR_BOARDING", delayReason: "" },
+    "TRV-103": { status: "BOARDING", delayReason: "" },
+    "TRV-104": { status: "SCHEDULED", delayReason: "" }
+  };
+  localStorage.setItem(STORAGE_FLIGHT_STATUSES, JSON.stringify(initialStatuses));
+  return initialStatuses;
+}
+
+function updateFlightStatus(flightId, newStatus, delayReason = "") {
+  const statuses = getFlightStatuses();
+  statuses[flightId] = { status: newStatus, delayReason: delayReason };
+  localStorage.setItem(STORAGE_FLIGHT_STATUSES, JSON.stringify(statuses));
+  
+  refreshAllUI();
+  renderAdminManifest(document.getElementById("adminManifestFlightSelect")?.value);
+}
+
+function renderAdminDashboard() {
+  renderAdminMetrics();
+  renderAdminFlightMonitor();
+  populateAdminManifestDropdown();
+  renderAdminWaitlistApproval();
+}
+
+function renderAdminMetrics() {
+  const container = document.getElementById("adminMetricsSummary");
+  if (!container) return;
+
+  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+  const waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+  const statuses = getFlightStatuses();
+
+  const totalPax = bookings
+    .filter(b => b.status === "CONFIRMED")
+    .reduce((sum, b) => sum + (b.passengers ? b.passengers.length : 1), 0);
+
+  const delayedCount = Object.values(statuses).filter(s => s.status === "DELAYED").length;
+
+  container.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+      <div class="card" style="border-left: 4px solid var(--sky);">
+        <div style="font-size: 0.8rem; color: var(--muted); font-weight:700;">TOTAL FLOWN/BOOKED PAX</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--text);">${totalPax} Passengers</div>
+      </div>
+      <div class="card" style="border-left: 4px solid #ffc107;">
+        <div style="font-size: 0.8rem; color: var(--muted); font-weight:700;">WAITLIST QUEUE</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent-strong);">${waitlist.length} Standby</div>
+      </div>
+      <div class="card" style="border-left: 4px solid #dc3545;">
+        <div style="font-size: 0.8rem; color: var(--muted); font-weight:700;">DELAYED FLIGHTS</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: #dc3545;">${delayedCount} Delayed</div>
+      </div>
+    </div>`;
+}
+
+function renderAdminFlightMonitor() {
+  const container = document.getElementById("adminFlightMonitorTable");
+  if (!container) return;
+
+  const statuses = getFlightStatuses();
+
+  let rows = FLIGHT_DATABASE.map(f => {
+    const currentStatusObj = statuses[f.flightId] || { status: "SCHEDULED", delayReason: "" };
+    const currentStatus = currentStatusObj.status;
+    const seatsLeft = getSeatsLeft(f);
+
+    return `
+      <tr>
+        <td style="text-align:center;"><strong>${f.flightId}</strong></td>
+        <td style="text-align:center;">${f.origin} &rarr; ${f.destination}</td>
+        <td style="text-align:center;">${formatDateMonthFirst(f.departureDate)} ${f.departure}</td>
+        <td style="text-align:center;">${seatsLeft} / ${f.capacity} left</td>
+        <td style="text-align:center;">
+          <span class="badge badge--status-${currentStatus.toLowerCase()}">${currentStatus.replace("_", " ")}</span>
+          ${currentStatus === "DELAYED" && currentStatusObj.delayReason ? `<br><small style="color:red;">(${currentStatusObj.delayReason})</small>` : ''}
+        </td>
+        <td style="text-align:center;">
+          <select onchange="handleAdminStatusChange('${f.flightId}', this.value)" style="padding: 4px 8px; font-size: 0.8rem;">
+            <option value="SCHEDULED" ${currentStatus === 'SCHEDULED' ? 'selected' : ''}>Scheduled</option>
+            <option value="NEAR_BOARDING" ${currentStatus === 'NEAR_BOARDING' ? 'selected' : ''}>Near Boarding</option>
+            <option value="BOARDING" ${currentStatus === 'BOARDING' ? 'selected' : ''}>Boarding</option>
+            <option value="DELAYED" ${currentStatus === 'DELAYED' ? 'selected' : ''}>Delayed</option>
+            <option value="FLOWN" ${currentStatus === 'FLOWN' ? 'selected' : ''}>Already Flown</option>
+          </select>
+        </td>
+      </tr>`;
+  }).join("");
+
+  container.innerHTML = `
+    <table class="table" style="width:100%; text-align:center;">
+      <thead>
+        <tr>
+          <th style="text-align:center;">Flight</th>
+          <th style="text-align:center;">Route</th>
+          <th style="text-align:center;">Departure</th>
+          <th style="text-align:center;">Seats</th>
+          <th style="text-align:center;">Current Status</th>
+          <th style="text-align:center;">Update Status</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function handleAdminStatusChange(flightId, newStatus) {
+  let delayReason = "";
+  if (newStatus === "DELAYED") {
+    delayReason = prompt("Enter delay reason/time (e.g., Delayed 45m due to weather):", "Aircraft Maintenance") || "Delayed";
+  }
+  updateFlightStatus(flightId, newStatus, delayReason);
+}
+
+function populateAdminManifestDropdown() {
+  const select = document.getElementById("adminManifestFlightSelect");
+  const modalSelect = document.getElementById("adminBookFlight");
+  if (!select) return;
+
+  const options = '<option value="">-- Select Flight --</option>' + FLIGHT_DATABASE.map(f => `
+    <option value="${f.flightId}">${f.flightId} (${f.origin} ➔ ${f.destination}) - ${f.departure}</option>
+  `).join("");
+
+  select.innerHTML = options;
+  if (modalSelect) modalSelect.innerHTML = options;
+}
+
+function renderAdminManifest(flightId) {
+  const container = document.getElementById("adminManifestContainer");
+  if (!container) return;
+
+  if (!flightId) {
+    container.innerHTML = `<div class="empty-state">Select a flight above to view its passenger manifest.</div>`;
+    return;
+  }
+
+  const flight = FLIGHT_DATABASE.find(f => f.flightId === flightId);
+  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+  const statuses = getFlightStatuses();
+  const currentStatus = statuses[flightId]?.status || "SCHEDULED";
+
+  const flightBookings = bookings.filter(b => b.flightId === flightId && b.status === "CONFIRMED");
+
+  let manifestPaxList = [];
+  flightBookings.forEach(b => {
+    (b.passengers || []).forEach(p => {
+      manifestPaxList.push({
+        pnr: b.pnr,
+        username: b.username,
+        contact: b.contact,
+        paxName: p.name,
+        age: p.age,
+        seat: p.seat || "Unassigned",
+        baggage: p.baggage || 0
+      });
+    });
+  });
+
+  let rows = manifestPaxList.map((p, idx) => `
+    <tr>
+      <td style="text-align:center;">${idx + 1}</td>
+      <td style="text-align:center;"><strong>${p.pnr}</strong></td>
+      <td style="text-align:center;">${p.paxName} (${p.age} y/o)</td>
+      <td style="text-align:center;"><strong>${p.seat}</strong></td>
+      <td style="text-align:center;">${p.baggage} kg</td>
+      <td style="text-align:center;"><small>${p.username} (${p.contact})</small></td>
+      <td style="text-align:center;">
+        <button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem;" onclick="adminCancelPassengerBooking('${p.pnr}')">
+          Cancel Booking
+        </button>
+      </td>
+    </tr>
+  `).join("");
+
+  container.innerHTML = `
+    <div class="manifest-header-box">
+      <div>
+        <h3 style="margin:0;">Manifest: ${flight.flightId} (${flight.origin} &rarr; ${flight.destinationName})</h3>
+        <small style="color:var(--muted);">Total Passengers Manifested: <strong>${manifestPaxList.length}</strong> | Capacity: ${flight.capacity}</small>
+      </div>
+      <div>
+        <span class="badge badge--status-${currentStatus.toLowerCase()}">${currentStatus.replace("_", " ")}</span>
+      </div>
+    </div>
+
+    ${manifestPaxList.length === 0 ? '<p style="padding:16px; text-align:center; color:var(--muted);">No confirmed passengers found on this flight manifest.</p>' : `
+      <table class="table" style="width:100%; text-align:center;">
+        <thead>
+          <tr>
+            <th style="text-align:center;">#</th>
+            <th style="text-align:center;">PNR</th>
+            <th style="text-align:center;">Passenger Name</th>
+            <th style="text-align:center;">Seat</th>
+            <th style="text-align:center;">Baggage</th>
+            <th style="text-align:center;">Account/Contact</th>
+            <th style="text-align:center;">Admin Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `}`;
+}
+
+function adminCancelPassengerBooking(pnr) {
+  if (confirm(`Admin Action: Are you sure you want to cancel booking ${pnr}? This will release seats immediately.`)) {
+    cancelPNRBooking(pnr);
+    const selectedFlight = document.getElementById("adminManifestFlightSelect")?.value;
+    renderAdminManifest(selectedFlight);
+  }
+}
+
+function openAdminAddBookingModal() {
+  const modal = document.getElementById("adminAddBookingModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeAdminAddBookingModal() {
+  const modal = document.getElementById("adminAddBookingModal");
+  if (modal) modal.style.display = "none";
+}
+
+function handleAdminAddBookingSubmit(e) {
+  if (e) e.preventDefault();
+  const flightId = document.getElementById("adminBookFlight")?.value;
+  const username = document.getElementById("adminBookUsername")?.value.trim() || "guest";
+  const contact = document.getElementById("adminBookContact")?.value.trim();
+  const paxName = document.getElementById("adminBookPaxName")?.value.trim();
+  const age = parseInt(document.getElementById("adminBookAge")?.value || "25", 10);
+  const seat = document.getElementById("adminBookSeat")?.value.trim().toUpperCase();
+
+  const flight = FLIGHT_DATABASE.find(f => f.flightId === flightId);
+  if (!flight) return;
+
+  const seatsLeft = getSeatsLeft(flight);
+  if (seatsLeft <= 0) {
+    alert("Cannot add booking: Flight is completely full!");
+    return;
+  }
+
+  const pnr = "TRV-ADM" + Math.random().toString(36).substring(2, 6).toUpperCase();
+  const newBooking = {
+    pnr: pnr,
+    username: username,
+    flightId: flightId,
+    route: `${flight.originName} ➔ ${flight.destinationName}`,
+    departure: `${formatDateMonthFirst(flight.departureDate)} @ ${flight.departure}`,
+    contact: contact,
+    status: "CONFIRMED",
+    totalFare: flight.baseFare,
+    passengers: [{ id: 1, name: paxName, age: age, seat: seat, baggage: 0 }]
+  };
+
+  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+  bookings.unshift(newBooking);
+  localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
+
+  alert(`✔ Booking ${pnr} created successfully for ${paxName}!`);
+  closeAdminAddBookingModal();
+  document.getElementById("adminAddBookingForm")?.reset();
+
+  refreshAllUI();
+  renderAdminManifest(flightId);
+}
+
+function renderAdminWaitlistApproval() {
+  const container = document.getElementById("adminWaitlistApprovalContainer");
+  if (!container) return;
+
+  let waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+
+  if (waitlist.length === 0) {
+    container.innerHTML = `<p class="p-3 text-center" style="color:var(--muted);">No waitlisted passengers currently pending.</p>`;
+    return;
+  }
+
+  waitlist.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+  let rows = waitlist.map((w, idx) => {
+    const flight = FLIGHT_DATABASE.find(f => f.flightId === w.flight);
+    const seatsLeft = getSeatsLeft(flight);
+    const hasSeatAvailable = seatsLeft > 0;
+
+    return `
+      <tr>
+        <td style="text-align:center;"><strong>Priority #${idx + 1}</strong></td>
+        <td style="text-align:center;"><strong>${w.flight}</strong></td>
+        <td style="text-align:center;">${w.name} (${w.age} y/o)</td>
+        <td style="text-align:center;"><small>${w.joinedAt}</small></td>
+        <td style="text-align:center;">
+          ${hasSeatAvailable 
+            ? `<span style="color:green; font-weight:bold;">${seatsLeft} Seats Available</span>` 
+            : `<span style="color:red; font-weight:bold;">Flight Full</span>`}
+        </td>
+        <td style="text-align:center;">
+          <button class="btn btn--accent" style="font-size:0.75rem; padding: 4px 10px;" 
+            ${!hasSeatAvailable ? 'disabled title="No seats available to approve"' : ''} 
+            onclick="adminApproveWaitlistEntry('${w.id}')">
+            Approve & Issue Seat
+          </button>
+          <button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem; padding: 4px 8px;" onclick="deleteWaitlistEntry('${w.id}')">
+            Reject
+          </button>
+        </td>
+      </tr>`;
+  }).join("");
+
+  container.innerHTML = `
+    <table class="table" style="width:100%; text-align:center;">
+      <thead>
+        <tr>
+          <th style="text-align:center;">Priority</th>
+          <th style="text-align:center;">Flight</th>
+          <th style="text-align:center;">Passenger Name</th>
+          <th style="text-align:center;">Time Joined</th>
+          <th style="text-align:center;">Seat Status</th>
+          <th style="text-align:center;">Admin Action</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function adminApproveWaitlistEntry(waitlistId) {
+  let waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+  const entryIdx = waitlist.findIndex(w => w.id === waitlistId);
+  if (entryIdx === -1) return;
+
+  const entry = waitlist[entryIdx];
+  const flight = FLIGHT_DATABASE.find(f => f.flightId === entry.flight);
+  const seatsLeft = getSeatsLeft(flight);
+
+  if (seatsLeft <= 0) {
+    alert("Cannot approve waitlist entry: No available seats on flight " + flight.flightId);
+    return;
+  }
+
+  // Find the first available seat dynamically
+  const hardcodedOccupied = ["1A", "2C", "3B", "5D", "7A", "8C", "10B", "11D"];
+  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+  const bookedSeats = [];
+  
+  bookings
+    .filter(b => b.flightId === flight.flightId && b.status !== "CANCELLED")
+    .forEach(b => (b.passengers || []).forEach(p => p.seat && bookedSeats.push(p.seat)));
+
+  const takenSeats = new Set([...hardcodedOccupied, ...bookedSeats]);
+  const columns = ["A", "B", "C", "D"];
+  let autoSeat = null;
+
+  for (let r = 1; r <= 12; r++) {
+    for (let c of columns) {
+      let code = `${r}${c}`;
+      if (!takenSeats.has(code)) {
+        autoSeat = code;
+        break;
+      }
+    }
+    if (autoSeat) break;
+  }
+
+  if (!autoSeat) autoSeat = "1A";
+
+  const pnr = "TRV-WLA" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+  const newBooking = {
+    pnr: pnr,
+    username: entry.username || "guest",
+    flightId: entry.flight,
+    route: `${flight.originName} ➔ ${flight.destinationName}`,
+    departure: `${formatDateMonthFirst(flight.departureDate)} @ ${flight.departure}`,
+    contact: `${entry.name.toLowerCase().replace(/\s+/g, '')}@terrava.com`,
+    status: "CONFIRMED",
+    totalFare: flight.baseFare,
+    passengers: [{ id: 1, name: entry.name, age: entry.age, seat: autoSeat, baggage: 0 }]
+  };
+
+  bookings.unshift(newBooking);
+  localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
+
+  waitlist.splice(entryIdx, 1);
+  localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(waitlist));
+
+  alert(`✔ Approved! Passenger ${entry.name} promoted from waitlist to confirmed booking (${pnr}, Seat ${autoSeat}).`);
+  refreshAllUI();
 }
