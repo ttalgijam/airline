@@ -100,28 +100,37 @@
       </div>
     </div>
 
-    <!-- STEP 2: passenger details -->
-    <div class="wizard-step" data-step="2">
-      <div class="card">
-        <h2>Step 2 — Who's flying?</h2>
-        <div class="selected-flight-banner" id="selectedFlightBanner"></div>
-        <label class="field">
-          <span>Contact name or email (for this booking)</span>
-          <input type="text" id="wContact" placeholder="e.g. Juan Dela Cruz">
-        </label>
-        <label class="field">
-          <span>Number of passengers</span>
-          <input type="number" id="wPaxCount" min="1" max="20" value="1">
-        </label>
-        <button type="button" class="btn btn--ghost" id="generatePaxBtn">Set passenger count</button>
-        <div class="passenger-list" id="wPassengerList"></div>
-      </div>
-      <div class="wizard-nav">
-        <button type="button" class="btn btn--ghost" data-back="1">Back</button>
-        <button type="button" class="btn btn--accent" id="toStep3Btn">Continue to seats</button>
-      </div>
-      <div class="result" id="step2Error"></div>
+<!-- STEP 2: passenger details -->
+<div class="wizard-step" data-step="2">
+  <div class="card">
+    <h2>Step 2 — Who's flying?</h2>
+    <div class="selected-flight-banner" id="selectedFlightBanner"></div>
+
+    <!-- SEPARATED CONTACT NAME & EMAIL -->
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <label class="field" style="flex: 1; min-width: 220px;">
+        <span>Contact Name <span style="color: #dc3545;">*</span></span>
+        <input type="text" id="wContactName" placeholder="e.g. Juan Dela Cruz" required>
+      </label>
+      <label class="field" style="flex: 1; min-width: 220px;">
+        <span>Contact Email <span style="color: #dc3545;">*</span></span>
+        <input type="email" id="wContactEmail" placeholder="e.g. juan@example.com" required>
+      </label>
     </div>
+
+    <label class="field" style="margin-top: 12px;">
+      <span>Number of passengers</span>
+      <input type="number" id="wPaxCount" min="1" max="20" value="1">
+    </label>
+    <button type="button" class="btn btn--ghost" id="generatePaxBtn">Set passenger count</button>
+    <div class="passenger-list" id="wPassengerList"></div>
+  </div>
+  <div class="wizard-nav">
+    <button type="button" class="btn btn--ghost" data-back="1">Back</button>
+    <button type="button" class="btn btn--accent" id="toStep3Btn">Continue to seats</button>
+  </div>
+  <div class="result" id="step2Error"></div>
+</div>
 
     <!-- STEP 3: seat selection -->
     <div class="wizard-step" data-step="3">

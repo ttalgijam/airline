@@ -553,12 +553,13 @@ function goToWizardStep(stepNum) {
 
   if (stepNum === 2) {
     const savedUser = getCurrentUser();
-    const contactInput = document.getElementById("wContact");
-    if (savedUser && contactInput && !contactInput.value) {
-      contactInput.value = `${savedUser.username}@terrava.com`;
+    const nameInput = document.getElementById("wContactName");
+    const emailInput = document.getElementById("wContactEmail");
+    if (savedUser) {
+      if (nameInput && !nameInput.value) nameInput.value = savedUser.username;
+      if (emailInput && !emailInput.value) emailInput.value = `${savedUser.username}@terrava.com`;
     }
   }
-
   document.querySelectorAll("#stepper .step").forEach(item => {
     const step = parseInt(item.getAttribute("data-step"), 10);
     if (step === stepNum) item.classList.add("is-current");
@@ -589,8 +590,11 @@ function resetWizardState() {
     totalCalculatedFare: 0
   };
 
-  const contactInput = document.getElementById("wContact");
-  if (contactInput) contactInput.value = "";
+const nameInput = document.getElementById("wContactName");
+  if (nameInput) nameInput.value = "";
+
+  const emailInput = document.getElementById("wContactEmail");
+  if (emailInput) emailInput.value = "";
   
   const paxList = document.getElementById("wPassengerList");
   if (paxList) paxList.innerHTML = "";
@@ -708,18 +712,36 @@ function generatePassengerFields() {
         </div>
       </div>`;
   }
+
+  for (let i = 1; i <= count; i++) {
+    html += `
+      <div class="card" style="margin-top: 12px; padding: 12px;">
+        <!-- Add or edit passenger input fields HERE -->
+      </div>`;
+  }
+
   container.innerHTML = html;
 }
 
 function handleStep2Submit() {
-  const contact = document.getElementById("wContact")?.value.trim();
+  const contactName = document.getElementById("wContactName")?.value.trim();
+  const contactEmail = document.getElementById("wContactEmail")?.value.trim();
   const errorDiv = document.getElementById("step2Error");
 
-  if (!contact) {
-    if (errorDiv) errorDiv.textContent = "Please enter contact name or email.";
+  // 1. Validate Contact Name
+  if (!contactName) {
+    if (errorDiv) errorDiv.textContent = "Please enter contact name.";
     return;
   }
 
+  // 2. Validate Contact Email Format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!contactEmail || !emailRegex.test(contactEmail)) {
+    if (errorDiv) errorDiv.textContent = "Please enter a valid contact email address.";
+    return;
+  }
+
+  // 3. Ensure passenger inputs are generated
   const nameInputs = document.querySelectorAll(".pax-name-input");
   if (nameInputs.length === 0) generatePassengerFields();
 
@@ -746,14 +768,18 @@ function handleStep2Submit() {
     return;
   }
 
+  // 4. Validate available seat capacity
   const seatsLeft = getSeatsLeft(bookingWizardState.selectedFlight);
   if (passengers.length > seatsLeft) {
     if (errorDiv) errorDiv.textContent = `Only ${seatsLeft} seat(s) remaining on this flight. Please reduce passenger count.`;
     return;
   }
 
+  // 5. Clear errors, save state, and go to Step 3
   if (errorDiv) errorDiv.textContent = "";
-  bookingWizardState.contact = contact;
+  bookingWizardState.contact = `${contactName} (${contactEmail})`;
+  bookingWizardState.contactName = contactName;
+  bookingWizardState.contactEmail = contactEmail;
   bookingWizardState.passengers = passengers;
 
   renderSeatMap();
