@@ -50,7 +50,7 @@
 
 <main class="app">
 
-  <!-- BROWSE FLIGHTS (read-only lookup, no commitment) -->
+<!-- BROWSE FLIGHTS (read-only lookup, no commitment) -->
   <section class="panel" id="panel-flights">
     <div class="panel__head">
       <h1>Where would you like to go?</h1>
@@ -60,6 +60,17 @@
       <input type="text" id="filterOrigin" placeholder="Origin (e.g. MNL)">
       <span class="filterbar__arrow">→</span>
       <input type="text" id="filterDest" placeholder="Destination (e.g. CEB)">
+      
+      <select id="filterSort">
+        <option value="fare-asc">Fare: Low to High</option>
+        <option value="fare-desc">Fare: High to Low</option>
+        <option value="schedule-asc" selected>Schedule: Earliest</option>
+        <option value="schedule-desc">Schedule: Latest</option>
+      </select>
+
+      <!-- Explicit Sort Button -->
+      <button type="button" class="btn btn--ghost" id="sortBtn">Sort</button>
+
       <button type="submit" class="btn btn--accent">Search</button>
       <button type="button" class="btn btn--ghost" id="clearFilter">Show all</button>
     </form>
@@ -133,24 +144,25 @@
 </div>
 
     <!-- STEP 3: seat selection -->
-    <div class="wizard-step" data-step="3">
-      <div class="card">
-        <div class="seatmap__head">
-          <h2>Step 3 — Choose your seats</h2>
-          <div class="legend">
-            <span class="legend__item"><i class="dot dot--free"></i>Free</span>
-            <span class="legend__item"><i class="dot dot--taken"></i>Taken</span>
-            <span class="legend__item"><i class="dot dot--pick"></i>Your pick</span>
-          </div>
-        </div>
-        <p class="sub">Tap a passenger chip below, then tap their seat on the map.</p>
-        <div class="pax-chip-row" id="paxChipRow"></div>
-        <div class="plane">
-          <div class="plane__nose">▲ nose</div>
-          <div class="seatgrid" id="seatGrid"></div>
-        </div>
+<div class="wizard-step" data-step="3">
+  <div class="card">
+    <div class="seatmap__head">
+      <h2>Step 3 — Choose your seats</h2>
+      <div class="legend">
+        <span class="legend__item"><i class="dot dot--free"></i>Free</span>
+        <span class="legend__item"><i class="dot dot--taken"></i>Taken</span>
+        <span class="legend__item"><i class="dot dot--pick"></i>Your pick</span>
       </div>
-      <div class="wizard-nav">
+    </div>
+
+    <p class="sub">Tap a passenger chip below, then tap their seat on the map.</p>
+    <div class="pax-chip-row" id="paxChipRow"></div>
+      <div class="plane">
+        <div class="plane__nose">▲ nose</div>
+        <div class="seatgrid" id="seatGrid"></div>
+      </div>
+    </div>
+    <div class="wizard-nav">
         <button type="button" class="btn btn--ghost" data-back="2">Back</button>
         <button type="button" class="btn btn--accent" id="toStep4Btn">Continue to baggage</button>
       </div>

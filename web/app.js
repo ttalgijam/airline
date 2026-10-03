@@ -334,10 +334,20 @@ function initTabs() {
 function initBrowseFlights() {
   const form = document.getElementById("flightFilterForm");
   const clearBtn = document.getElementById("clearFilter");
+  const sortBtn = document.getElementById("sortBtn");
 
   if (form) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
+      const orig = document.getElementById("filterOrigin")?.value.trim().toUpperCase() || "";
+      const dest = document.getElementById("filterDest")?.value.trim().toUpperCase() || "";
+      renderBrowseFlights(orig, dest);
+    });
+  }
+
+  // Trigger sorting on explicit button click
+  if (sortBtn) {
+    sortBtn.addEventListener("click", () => {
       const orig = document.getElementById("filterOrigin")?.value.trim().toUpperCase() || "";
       const dest = document.getElementById("filterDest")?.value.trim().toUpperCase() || "";
       renderBrowseFlights(orig, dest);
@@ -353,14 +363,42 @@ function initBrowseFlights() {
   }
 }
 
-function renderBrowseFlights(originFilter = "", destFilter = "") {
+function renderBrowseFlights(originFilter = "", destFilter = "", sortBy = "") {
   const container = document.getElementById("flightsTable");
   if (!container) return;
 
+  // Read sort preference from dropdown if not passed as an argument
+  if (!sortBy) {
+    sortBy = document.getElementById("filterSort")?.value || "fare-asc";
+  }
+
+  // 1. Filter matching flights
   const filtered = FLIGHT_DATABASE.filter(f => {
     const matchOrig = !originFilter || f.origin.includes(originFilter) || f.originName.toUpperCase().includes(originFilter);
     const matchDest = !destFilter || f.destination.includes(destFilter) || f.destinationName.toUpperCase().includes(destFilter);
     return matchOrig && matchDest;
+  });
+
+  // 2. Sort by Base Fare or Departure Schedule
+  filtered.sort((a, b) => {
+    switch (sortBy) {
+      case "fare-asc":
+        return a.baseFare - b.baseFare;
+      case "fare-desc":
+        return b.baseFare - a.baseFare;
+      case "schedule-asc": {
+        const timeA = new Date(`${a.departureDate} ${a.departure || ''}`).getTime();
+        const timeB = new Date(`${b.departureDate} ${b.departure || ''}`).getTime();
+        return timeA - timeB;
+      }
+      case "schedule-desc": {
+        const timeA = new Date(`${a.departureDate} ${a.departure || ''}`).getTime();
+        const timeB = new Date(`${b.departureDate} ${b.departure || ''}`).getTime();
+        return timeB - timeA;
+      }
+      default:
+        return 0;
+    }
   });
 
   if (filtered.length === 0) {
@@ -368,6 +406,7 @@ function renderBrowseFlights(originFilter = "", destFilter = "") {
     return;
   }
 
+  // 3. Render Table HTML
   let html = `<table class="table" style="width:100%; text-align:center;">
     <thead>
       <tr>
@@ -428,67 +467,67 @@ function openFlightDetailsModal(flightId) {
     document.body.appendChild(modal);
   }
 
-  modal.innerHTML = `
-    <div class="card" style="max-width: 520px; width: 100%; background: var(--bg, #ffffff); padding: 24px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.25);">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line, #eee); padding-bottom: 12px; margin-bottom: 16px;">
-        <h2 style="margin: 0; font-size: 1.3rem;">✈ Flight Details — <span style="color: var(--accent, #0066cc);">${flight.flightId}</span></h2>
-        <button type="button" onclick="closeFlightDetailsModal()" style="background:none; border:none; font-size: 1.5rem; cursor:pointer;">&times;</button>
+modal.innerHTML = `
+  <div class="card" style="max-width: 520px; width: 100%; background: var(--surface); padding: 24px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); color: var(--text);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 16px;">
+      <h2 style="margin: 0; font-size: 1.3rem;">✈ Flight Details — <span style="color: var(--sky);">${flight.flightId}</span></h2>
+      <button type="button" onclick="closeFlightDetailsModal()" style="background:none; border:none; font-size: 1.5rem; color: var(--text); cursor:pointer;">&times;</button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.95rem;">
+      <div>
+        <span style="color: var(--muted); font-size: 0.8rem; font-weight:600;">ORIGIN</span>
+        <div style="font-weight: 600; font-size: 1.05rem;">${flight.originName} (${flight.origin})</div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.95rem;">
-        <div>
-          <span style="color: var(--muted, #666); font-size: 0.8rem; font-weight:600;">ORIGIN</span>
-          <div style="font-weight: 600; font-size: 1.05rem;">${flight.originName} (${flight.origin})</div>
-        </div>
+      <div>
+        <span style="color: var(--muted); font-size: 0.8rem; font-weight:600;">DESTINATION</span>
+        <div style="font-weight: 600; font-size: 1.05rem; color: var(--sky);">${flight.destinationName} (${flight.destination})</div>
+      </div>
 
-        <div>
-          <span style="color: var(--muted, #666); font-size: 0.8rem; font-weight:600;">DESTINATION</span>
-          <div style="font-weight: 600; font-size: 1.05rem; color: var(--accent, #0066cc);">${flight.destinationName} (${flight.destination})</div>
+      <div style="display: flex; gap: 16px; margin-top: 4px; background: var(--surface-2); padding: 10px; border-radius: 6px;">
+        <div style="flex: 1;">
+          <span style="color: var(--muted); font-size: 0.75rem; font-weight:600;">DATE</span>
+          <div style="font-weight: 600;">📅 ${formatDateMonthFirst(flight.departureDate)}</div>
         </div>
-
-        <div style="display: flex; gap: 16px; margin-top: 4px; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 6px;">
-          <div style="flex: 1;">
-            <span style="color: var(--muted, #666); font-size: 0.75rem; font-weight:600;">DATE</span>
-            <div style="font-weight: 600;">📅 ${formatDateMonthFirst(flight.departureDate)}</div>
-          </div>
-          <div style="flex: 1;">
-            <span style="color: var(--muted, #666); font-size: 0.75rem; font-weight:600;">DEPARTURE TIME</span>
-            <div style="font-weight: 600;">⏰ ${flight.departure}</div>
-          </div>
-          <div style="flex: 1;">
-            <span style="color: var(--muted, #666); font-size: 0.75rem; font-weight:600;">DURATION</span>
-            <div style="font-weight: 600;">⏱ ${flight.duration}</div>
-          </div>
+        <div style="flex: 1;">
+          <span style="color: var(--muted); font-size: 0.75rem; font-weight:600;">DEPARTURE TIME</span>
+          <div style="font-weight: 600;">⏰ ${flight.departure}</div>
         </div>
-
-        <div style="display: flex; gap: 16px;">
-          <div style="flex: 1;">
-            <span style="color: var(--muted, #666); font-size: 0.75rem; font-weight:600;">AIRCRAFT</span>
-            <div style="font-weight: 600;">🛩 ${flight.aircraft}</div>
-          </div>
-          <div style="flex: 1;">
-            <span style="color: var(--muted, #666); font-size: 0.75rem; font-weight:600;">SEAT AVAILABILITY</span>
-            <div style="font-weight: 600; color: ${isFull ? 'red' : 'green'};">
-              ${isFull ? 'FULL (0 seats remaining)' : `${seatsLeft} seat(s) available`}
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top: 8px; padding: 12px; background: var(--bg-muted, #f8f9fa); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-          <span>Base Passenger Fare</span>
-          <strong style="font-size: 1.25rem; color: var(--accent, #0066cc);">₱${flight.baseFare.toLocaleString()}</strong>
+        <div style="flex: 1;">
+          <span style="color: var(--muted); font-size: 0.75rem; font-weight:600;">DURATION</span>
+          <div style="font-weight: 600;">⏱ ${flight.duration}</div>
         </div>
       </div>
 
-      <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
-        <button type="button" class="btn btn--ghost" onclick="closeFlightDetailsModal()">Close</button>
-        ${isFull 
-          ? `<button type="button" class="btn btn--ghost" style="color: #dc3545; border-color: #dc3545;" onclick="closeFlightDetailsModal(); switchToWaitlist('${flight.flightId}')">Join Waitlist</button>`
-          : `<button type="button" class="btn btn--accent" onclick="closeFlightDetailsModal(); startBookingFlight('${flight.flightId}')">Book Flight Now</button>`
-        }
+      <div style="display: flex; gap: 16px;">
+        <div style="flex: 1;">
+          <span style="color: var(--muted); font-size: 0.75rem; font-weight:600;">AIRCRAFT</span>
+          <div style="font-weight: 600;">🛩 ${flight.aircraft}</div>
+        </div>
+        <div style="flex: 1;">
+          <span style="color: var(--muted); font-size: 0.75rem; font-weight:600;">SEAT AVAILABILITY</span>
+          <div style="font-weight: 600; color: ${isFull ? 'var(--danger)' : 'var(--ok)'};">
+            ${isFull ? 'FULL (0 seats remaining)' : `${seatsLeft} seat(s) available`}
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 8px; padding: 12px; background: var(--bg-muted); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span>Base Passenger Fare</span>
+        <strong style="font-size: 1.25rem; color: var(--sky);">₱${flight.baseFare.toLocaleString()}</strong>
       </div>
     </div>
-  `;
+
+    <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
+      <button type="button" class="btn btn--ghost" onclick="closeFlightDetailsModal()">Close</button>
+      ${isFull 
+        ? `<button type="button" class="btn btn--ghost" style="color: var(--danger); border-color: var(--danger);" onclick="closeFlightDetailsModal(); switchToWaitlist('${flight.flightId}')">Join Waitlist</button>`
+        : `<button type="button" class="btn btn--accent" onclick="closeFlightDetailsModal(); startBookingFlight('${flight.flightId}')">Book Flight Now</button>`
+      }
+    </div>
+  </div>
+`;
 
   modal.style.display = "flex";
 }
@@ -710,13 +749,6 @@ function generatePassengerFields() {
             <input type="number" class="pax-age-input" value="25" min="1" max="120" style="width:100%;">
           </div>
         </div>
-      </div>`;
-  }
-
-  for (let i = 1; i <= count; i++) {
-    html += `
-      <div class="card" style="margin-top: 12px; padding: 12px;">
-        <!-- Add or edit passenger input fields HERE -->
       </div>`;
   }
 
@@ -1319,6 +1351,7 @@ function populateWaitlistDropdown() {
 function handleWaitlistSubmit(event) {
   if (event) event.preventDefault();
 
+  // Existing DOM Elements
   const flightSelect = document.getElementById("waitlistFlight");
   const nameInput = document.getElementById("waitlistName");
   const ageInput = document.getElementById("waitlistAge");
@@ -1327,6 +1360,8 @@ function handleWaitlistSubmit(event) {
   const flightCode = flightSelect?.value;
   const name = nameInput?.value.trim();
   const age = ageInput?.value;
+
+  // Existing Active User Helper
   const savedUser = getCurrentUser();
 
   if (!flightCode || !name || !age) {
@@ -1334,8 +1369,11 @@ function handleWaitlistSubmit(event) {
     return;
   }
 
+  // Existing Storage & Database Variables
   const currentWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
   const flight = FLIGHT_DATABASE.find(f => f.flightId === flightCode);
+  
+  // Existing Capacity Helper
   const seatsLeft = getSeatsLeft(flight);
   const isFull = seatsLeft <= 0;
 
@@ -1353,19 +1391,19 @@ function handleWaitlistSubmit(event) {
   currentWaitlist.push(entry);
   localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(currentWaitlist));
 
-  refreshAllUI();
-
-if (resultDiv) {
+  if (resultDiv) {
     resultDiv.innerHTML = `<span style="color:green; font-weight:bold;">✔ Added to waitlist under Request ID: ${entry.id}</span>`;
   }
 
-  renderWaitlistTable();
+  // Refresh UI and Table using existing engines
+  refreshAllUI();
   document.getElementById("waitlistForm")?.reset();
 }
 
 function renderWaitlistTable() {
-  const container = document.getElementById("waitlistTable") || document.getElementById("waitlistTableBody")?.closest('.card');
-  if (!container) return;
+  const tbody = document.getElementById("waitlistTableBody");
+  const container = document.getElementById("waitlistTable") || tbody?.closest('.card');
+  if (!container && !tbody) return;
 
   const savedUser = getCurrentUser();
   const allWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
@@ -1373,7 +1411,11 @@ function renderWaitlistTable() {
   // Admin View
   if (savedUser && (savedUser.role === 'admin' || savedUser.username === 'admin')) {
     if (allWaitlist.length === 0) {
-      container.innerHTML = `<p class="p-3" style="color: var(--muted);">No waitlist entries in system.</p>`;
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:16px; text-align:center; color: var(--muted);">No waitlist entries in system.</td></tr>`;
+      } else {
+        container.innerHTML = `<p class="p-3" style="color: var(--muted);">No waitlist entries in system.</p>`;
+      }
       return;
     }
 
@@ -1389,24 +1431,28 @@ function renderWaitlistTable() {
       </tr>
     `).join("");
 
-    container.innerHTML = `
-      <div style="margin-top:12px;">
-        <h4 style="color:#dc3545; margin-bottom:8px;">⚙ Admin Master Standby Control</h4>
-        <table class="table" style="width:100%; text-align:center;">
-          <thead>
-            <tr>
-              <th style="text-align:center;">#</th>
-              <th style="text-align:center;">Flight</th>
-              <th style="text-align:center;">Passenger Name</th>
-              <th style="text-align:center;">Account</th>
-              <th style="text-align:center;">Time</th>
-              <th style="text-align:center;">Status</th>
-              <th style="text-align:center;">Action</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
+    if (tbody) {
+      tbody.innerHTML = rows;
+    } else {
+      container.innerHTML = `
+        <div style="margin-top:12px;">
+          <h4 style="color:#dc3545; margin-bottom:8px;">⚙ Admin Master Standby Control</h4>
+          <table class="table" style="width:100%; text-align:center;">
+            <thead>
+              <tr>
+                <th style="text-align:center;">#</th>
+                <th style="text-align:center;">Flight</th>
+                <th style="text-align:center;">Passenger Name</th>
+                <th style="text-align:center;">Account</th>
+                <th style="text-align:center;">Time</th>
+                <th style="text-align:center;">Status</th>
+                <th style="text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
     return;
   }
 
@@ -1417,38 +1463,44 @@ function renderWaitlistTable() {
   });
 
   if (userWaitlist.length === 0) {
-    container.innerHTML = `<p class="p-3" style="color: var(--muted);">${savedUser ? 'You have no active waitlist requests.' : 'No guest waitlist entries found.'}</p>`;
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:16px; text-align:center; color: var(--muted);">${savedUser ? 'You have no active waitlist requests.' : 'No guest waitlist entries found.'}</td></tr>`;
+    } else {
+      container.innerHTML = `<p class="p-3" style="color: var(--muted);">${savedUser ? 'You have no active waitlist requests.' : 'No guest waitlist entries found.'}</p>`;
+    }
     return;
   }
 
-  let html = `
-    <div style="margin-top:12px;">
-      <h4 style="margin-bottom:8px;">📋 ${savedUser ? `My Waitlist Requests (${savedUser.username})` : 'Guest Session Waitlist Queue'}</h4>
-      <table class="table" style="width:100%; text-align:center;">
-        <thead>
-          <tr>
-            <th style="text-align:center;">#</th>
-            <th style="text-align:center;">Flight</th>
-            <th style="text-align:center;">Name</th>
-            <th style="text-align:center;">Time</th>
-            <th style="text-align:center;">Status</th>
-          </tr>
-        </thead>
-        <tbody>`;
+  let rows = userWaitlist.map((w, idx) => `
+    <tr>
+      <td style="text-align:center;">${idx + 1}</td>
+      <td style="text-align:center;"><strong>${w.flight}</strong></td>
+      <td style="text-align:center;">${w.name} (${w.age} y/o)</td>
+      <td style="text-align:center;">${w.joinedAt}</td>
+      <td style="text-align:center;"><span style="padding: 2px 6px; border-radius: 4px; background: #ffc107; color: black; font-size: 0.85rem;">${w.status}</span></td>
+    </tr>
+  `).join("");
 
-  userWaitlist.forEach((w, idx) => {
-    html += `
-      <tr>
-        <td style="text-align:center;">${idx + 1}</td>
-        <td style="text-align:center;"><strong>${w.flight}</strong></td>
-        <td style="text-align:center;">${w.name} (${w.age} y/o)</td>
-        <td style="text-align:center;">${w.joinedAt}</td>
-        <td style="text-align:center;"><span style="padding: 2px 6px; border-radius: 4px; background: #ffc107; color: black; font-size: 0.85rem;">${w.status}</span></td>
-      </tr>`;
-  });
-
-  html += `</tbody></table></div>`;
-  container.innerHTML = html;
+  if (tbody) {
+    tbody.innerHTML = rows;
+  } else {
+    container.innerHTML = `
+      <div style="margin-top:12px;">
+        <h4 style="margin-bottom:8px;">📋 ${savedUser ? `My Waitlist Requests (${savedUser.username})` : 'Guest Session Waitlist Queue'}</h4>
+        <table class="table" style="width:100%; text-align:center;">
+          <thead>
+            <tr>
+              <th style="text-align:center;">#</th>
+              <th style="text-align:center;">Flight</th>
+              <th style="text-align:center;">Name</th>
+              <th style="text-align:center;">Time</th>
+              <th style="text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
 }
 
 function updateNavigationForRole(user) {
