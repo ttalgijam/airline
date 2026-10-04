@@ -1412,3 +1412,69 @@ th {
 .plane-seat.is-selected .seat-headrest {
   background-color: rgba(16, 35, 63, 0.25) !important;
 }
+
+/* ============================================================
+   MODAL OVERFLOW & BUTTON TEXT FIXES
+   ============================================================ */
+
+/* 1. Fix invisible button text inside modal */
+.modal__content .btn--accent {
+  color: #10233F !important; /* Visible dark navy text on yellow */
+  background-color: var(--accent) !important;
+  font-weight: 700 !important;
+}
+
+/* 2. Prevent div containers (.field & .password-wrapper) from adding background layers */
+.modal__content .field,
+.modal__content .password-wrapper {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 3. Ensure input boxes take full width without overflow */
+.modal__content input[type="text"],
+.modal__content input[type="password"],
+.modal__content input[type="email"] {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background-color: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 10px 42px 10px 12px !important;
+  font-size: 14px !important;
+  outline: none !important;
+}
+
+/* 4. Align password wrapper & toggle icon */
+.password-wrapper {
+  position: relative !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.password-toggle-btn {
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--muted) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 4px !important;
+}
+
+.password-toggle-btn:hover {
+  color: var(--text) !important;
+}
+
+.password-toggle-btn svg {
+  pointer-events: none;
+  stroke: currentColor;
+}
