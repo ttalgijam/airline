@@ -7,6 +7,7 @@ const STORAGE_WAITLIST = "terrava_waitlist";
 const STORAGE_LAST_CANCELLED = "terrava_last_cancelled";
 const STORAGE_USERS = "terrava_registered_users";
 const STORAGE_FLIGHT_STATUSES = "terrava_flight_statuses";
+const STORAGE_FLIGHTS = "terrava_flights";
 
 // Helper function to format date string into Month-First format
 function formatDateMonthFirst(dateStr) {
@@ -40,8 +41,8 @@ const FLIGHT_DATABASE = [
     duration: "1h 25m",
     aircraft: "Airbus A320",
     baseFare: 1899, 
-    capacity: 5, 
-    occupied: 5 
+    capacity: 48, // Updated from 5 to match aircraft layout
+    occupied: 48 
   },
   { 
     flightId: "TRV-102", 
@@ -54,8 +55,8 @@ const FLIGHT_DATABASE = [
     duration: "1h 50m",
     aircraft: "Airbus A321neo",
     baseFare: 2450, 
-    capacity: 180, 
-    occupied: 120 
+    capacity: 48, 
+    occupied: 8 
   },
   { 
     flightId: "TRV-103",  
@@ -68,8 +69,8 @@ const FLIGHT_DATABASE = [
     duration: "1h 00m",
     aircraft: "ATR 72-600",
     baseFare: 1650, 
-    capacity: 150, 
-    occupied: 90 
+    capacity: 48, 
+    occupied: 30 
   },
   { 
     flightId: "TRV-104", 
@@ -82,14 +83,24 @@ const FLIGHT_DATABASE = [
     duration: "1h 50m",
     aircraft: "Boeing 737-800",
     baseFare: 2100, 
-    capacity: 180, 
-    occupied: 178 
+    capacity: 48, 
+    occupied: 46 
   }
 ];
 
 // Active User Helper
 function getCurrentUser() {
   return JSON.parse(localStorage.getItem("terrava_user") || "null");
+}
+
+// Unique Guest Session Helper (Persists in localStorage per browser profile)
+function getGuestId() {
+  let guestId = localStorage.getItem("terrava_guest_id");
+  if (!guestId) {
+    guestId = "guest_" + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem("terrava_guest_id", guestId);
+  }
+  return guestId;
 }
 
 // Dynamic Seat Calculation Helper
@@ -137,6 +148,24 @@ function initDefaultUsers() {
   if (updated) {
     localStorage.setItem(STORAGE_USERS, JSON.stringify(existingUsers));
   }
+}
+
+function initFlightData() {
+  let flights = JSON.parse(localStorage.getItem(STORAGE_FLIGHTS) || "[]");
+
+  // If local storage is empty, grab default flights from FLIGHT_DATABASE
+  if (flights.length === 0 && typeof FLIGHT_DATABASE !== "undefined") {
+    flights = FLIGHT_DATABASE;
+  }
+
+  // Update capacity to 48 for all flights
+  flights = flights.map(f => ({
+    ...f,
+    capacity: 48,
+    totalSeats: 48
+  }));
+
+  localStorage.setItem(STORAGE_FLIGHTS, JSON.stringify(flights));
 }
 
 // --- CENTRALIZED TAB SWITCH ENGINE ---
@@ -202,6 +231,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initWaitlist();
   initModalListeners();
   initDefaultUsers();
+
+  initFlightData();
 
   document.getElementById("adminAddBookingForm")?.addEventListener("submit", handleAdminAddBookingSubmit);
 
@@ -818,6 +849,112 @@ function handleStep2Submit() {
   goToWizardStep(3);
 }
 
+// In-memory cache so seats stay fixed in place after being randomly generated
+const flightOccupancyCache = {};
+
+// Seeded pseudo-random number generator
+function seededRandom(seedStr) {
+  let hash = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = seedStr.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const x = Math.sin(hash++) * 10000;
+  return x - Math.floor(x);
+}
+
+// Deterministically shuffles an array using a string seed (flight ID)
+function shuffleWithSeed(array, seed) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const rand = seededRandom(`${seed}-shuffle-${i}`);
+    const j = Math.floor(rand * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Generates occupied seats matching the flight's EXACT available seats count from getSeatsLeft()
+function getBookedSeatsForFlight(flight) {
+  if (!flight) return new Set();
+
+  // Accept either flight object or flightId string
+  if (typeof flight === "string") {
+    const flightIdStr = flight;
+    flight = FLIGHT_DATABASE.find(f => f.flightId === flightIdStr) || 
+             JSON.parse(localStorage.getItem(STORAGE_FLIGHTS) || "[]").find(f => f.flightId === flightIdStr);
+    if (!flight) return new Set();
+  }
+
+  const flightId = flight.flightId || flight.id || "FLIGHT";
+  const totalSeats = parseInt(flight.capacity || flight.totalSeats || flight.total_seats || 48, 10);
+  const totalRows = Math.ceil(totalSeats / 4);
+  const cols = ['A', 'B', 'C', 'D'];
+
+  // 1. Use central getSeatsLeft helper for accurate available count
+  const availableCount = getSeatsLeft(flight);
+
+  // 2. Calculate exact required taken seats count
+  const requiredOccupiedCount = Math.max(0, Math.min(totalSeats, totalSeats - availableCount));
+
+  // 3. Generate all seat codes (1A, 1B, 1C, 1D...)
+  const allSeats = [];
+  let seatCount = 0;
+  for (let r = 1; r <= totalRows; r++) {
+    for (let c of cols) {
+      if (seatCount < totalSeats) {
+        allSeats.push(`${r}${c}`);
+        seatCount++;
+      }
+    }
+  }
+
+  // 4. Deterministically shuffle using flightId as seed
+  const shuffledSeats = shuffleWithSeed(allSeats, flightId);
+
+  // 5. Slice exact taken seats
+  const initialOccupied = shuffledSeats.slice(0, requiredOccupiedCount);
+  const occupiedSet = new Set(initialOccupied);
+
+  // 6. Include seats already assigned in confirmed localStorage bookings
+  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+  bookings
+    .filter(b => b.flightId === flightId && b.status !== "CANCELLED")
+    .forEach(b => {
+      if (b.passengers) {
+        b.passengers.forEach(p => {
+          if (p.seat) occupiedSet.add(p.seat);
+        });
+      }
+    });
+
+  return occupiedSet;
+}
+
+function assignSeatToActivePax(seatCode) {
+  const flight = bookingWizardState.selectedFlight;
+  if (!flight) return;
+
+  // Pass flight object instead of string ID
+  const takenSeats = getBookedSeatsForFlight(flight);
+
+  if (takenSeats.has(seatCode)) {
+    alert("This seat has already been booked by another passenger.");
+    return;
+  }
+
+  const activeIdx = bookingWizardState.activePaxIndexForSeat || 0;
+  if (!bookingWizardState.passengers[activeIdx]) return;
+
+  // Toggle seat selection
+  if (bookingWizardState.passengers[activeIdx].seat === seatCode) {
+    bookingWizardState.passengers[activeIdx].seat = null;
+  } else {
+    bookingWizardState.passengers[activeIdx].seat = seatCode;
+  }
+
+  renderSeatMap();
+}
+
 function renderSeatMap() {
   const paxChipRow = document.getElementById("paxChipRow");
   const seatGrid = document.getElementById("seatGrid");
@@ -830,23 +967,15 @@ function renderSeatMap() {
     </button>
   `).join("");
 
-  const rows = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const flight = bookingWizardState.selectedFlight;
-  const hardcodedOccupied = ["1A", "2C", "3B", "5D", "7A", "8C", "10B", "11D"];
-  const bookedSeats = [];
+  if (!flight) return;
 
-  if (flight) {
-    const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
-    bookings
-      .filter(b => b.flightId === flight.flightId && b.status !== "CANCELLED")
-      .forEach(b => {
-        (b.passengers || []).forEach(p => {
-          if (p.seat) bookedSeats.push(p.seat);
-        });
-      });
-  }
+  // Calculate total rows required based on flight capacity (4 seats per row)
+  const totalSeats = flight.totalSeats || 48;
+  const totalRows = Math.ceil(totalSeats / 4);
+  const rows = Array.from({ length: totalRows }, (_, i) => i + 1);
 
-  const occupiedSeats = Array.from(new Set([...hardcodedOccupied, ...bookedSeats]));
+  const occupiedSet = getBookedSeatsForFlight(flight);
 
   let cabinHtml = `
     <div class="airplane-cabin">
@@ -855,37 +984,53 @@ function renderSeatMap() {
 
   rows.forEach(r => {
     cabinHtml += `<div class="plane-row"><div class="seat-group">`;
+    
+    // Left side: A, B
     ["A", "B"].forEach(col => {
       const seatCode = `${r}${col}`;
-      const isOccupied = occupiedSeats.includes(seatCode);
+      const isOccupied = occupiedSet.has(seatCode);
       const assignedPax = bookingWizardState.passengers.find(p => p.seat === seatCode);
+      const isSelectedByOtherPax = bookingWizardState.passengers.some(
+        (p, idx) => p.seat === seatCode && idx !== bookingWizardState.activePaxIndexForSeat
+      );
+
+      const isDisabled = isOccupied || isSelectedByOtherPax;
 
       cabinHtml += `
         <button type="button" 
-          class="plane-seat ${assignedPax ? 'is-selected' : ''}" 
-          ${isOccupied ? 'disabled' : ''} 
+          class="plane-seat ${isOccupied ? 'is-taken' : ''} ${assignedPax ? 'is-selected' : ''}" 
+          ${isDisabled ? 'disabled' : ''} 
           onclick="assignSeatToActivePax('${seatCode}')">
           <div class="seat-headrest"></div>
           <span class="seat-label">${seatCode}</span>
           <span class="pax-tag">${assignedPax ? assignedPax.name.split(' ')[0] : (isOccupied ? 'X' : '')}</span>
         </button>`;
     });
+
     cabinHtml += `</div><div class="plane-aisle">${r}</div><div class="seat-group">`;
+
+    // Right side: C, D
     ["C", "D"].forEach(col => {
       const seatCode = `${r}${col}`;
-      const isOccupied = occupiedSeats.includes(seatCode);
+      const isOccupied = occupiedSet.has(seatCode);
       const assignedPax = bookingWizardState.passengers.find(p => p.seat === seatCode);
+      const isSelectedByOtherPax = bookingWizardState.passengers.some(
+        (p, idx) => p.seat === seatCode && idx !== bookingWizardState.activePaxIndexForSeat
+      );
+
+      const isDisabled = isOccupied || isSelectedByOtherPax;
 
       cabinHtml += `
         <button type="button" 
-          class="plane-seat ${assignedPax ? 'is-selected' : ''}" 
-          ${isOccupied ? 'disabled' : ''} 
+          class="plane-seat ${isOccupied ? 'is-taken' : ''} ${assignedPax ? 'is-selected' : ''}" 
+          ${isDisabled ? 'disabled' : ''} 
           onclick="assignSeatToActivePax('${seatCode}')">
           <div class="seat-headrest"></div>
           <span class="seat-label">${seatCode}</span>
           <span class="pax-tag">${assignedPax ? assignedPax.name.split(' ')[0] : (isOccupied ? 'X' : '')}</span>
         </button>`;
     });
+
     cabinHtml += `</div></div>`;
   });
 
@@ -900,24 +1045,6 @@ function renderSeatMap() {
 
 function setActivePaxForSeat(idx) {
   bookingWizardState.activePaxIndexForSeat = idx;
-  renderSeatMap();
-}
-
-function assignSeatToActivePax(seatCode) {
-  const currentPax = bookingWizardState.passengers[bookingWizardState.activePaxIndexForSeat];
-  if (!currentPax) return;
-
-  bookingWizardState.passengers.forEach(p => {
-    if (p.seat === seatCode) p.seat = null;
-  });
-
-  currentPax.seat = seatCode;
-
-  const nextUnassignedIdx = bookingWizardState.passengers.findIndex(p => !p.seat);
-  if (nextUnassignedIdx !== -1) {
-    bookingWizardState.activePaxIndexForSeat = nextUnassignedIdx;
-  }
-
   renderSeatMap();
 }
 
@@ -978,6 +1105,32 @@ function getBaggageFare(weight) {
   return 0;
 }
 
+// Generates the baseline initial taken seats consistently per flight
+function getInitialTakenSeats(flightId, totalRows = 10, occupancyRate = 0.45) {
+  const seats = [];
+  const cols = ['A', 'B', 'C', 'D'];
+
+  for (let r = 1; r <= totalRows; r++) {
+    for (let c of cols) {
+      const seatCode = `${r}${c}`;
+      // flightId + seatCode ensures PR101-1A is always same status across browser reloads
+      const pseudoRand = seededRandom(`${flightId}-${seatCode}`);
+      if (pseudoRand < occupancyRate) {
+        seats.push(seatCode);
+      }
+    }
+  }
+  return seats;
+}
+
+// Combines seeded seats with actual booked seats saved from the database
+function getOccupiedSeatsForFlight(flight) {
+  if (!flight) return [];
+  const initialOccupied = getInitialTakenSeats(flight.flightId || flight.id || "FLIGHT");
+  const dbBookedSeats = flight.bookedSeats || []; 
+  return Array.from(new Set([...initialOccupied, ...dbBookedSeats]));
+}
+
 function renderReviewSummary() {
   const container = document.getElementById("reviewSummary");
   if (!container) return;
@@ -986,14 +1139,26 @@ function renderReviewSummary() {
   let totalFare = 0;
 
   let paxTableRows = bookingWizardState.passengers.map(p => {
-    const base = p.age < 12 ? flight.baseFare * 0.75 : flight.baseFare;
+    let paxType = "Adult";
+    let multiplier = 1.0;
+
+    // Determine passenger type and discount multiplier
+    if (p.age >= 60) {
+      paxType = "Senior";
+      multiplier = 0.80; // 20% Senior Citizen discount (change to 0.75 if you want 25% off)
+    } else if (p.age < 12) {
+      paxType = "Child";
+      multiplier = 0.75; // 25% Child discount
+    }
+
+    const base = flight.baseFare * multiplier;
     const bagFare = getBaggageFare(p.baggage);
     const subtotal = base + bagFare;
     totalFare += subtotal;
 
     return `
       <tr>
-        <td style="text-align:center;">${p.name} (${p.age < 12 ? 'Child' : 'Adult'})</td>
+        <td style="text-align:center;">${p.name} (${paxType})</td>
         <td style="text-align:center;">${p.seat}</td>
         <td style="text-align:center;">${p.baggage} kg</td>
         <td style="text-align:center;">₱${subtotal.toLocaleString()}</td>
@@ -1024,15 +1189,25 @@ function renderReviewSummary() {
       <h3 style="text-align: right; margin-top: 16px; color: var(--accent);">Total Fare: ₱${totalFare.toLocaleString()}</h3>
     </div>`;
 }
-
 function handleFinalBookingSubmit() {
   const flight = bookingWizardState.selectedFlight;
+  if (!flight) return;
+
+  // 1. Check if all passengers have assigned seats
+  const unassignedPax = bookingWizardState.passengers.some(p => !p.seat);
+  if (unassignedPax) {
+    alert("Please assign a seat for all passengers before completing the booking.");
+    return;
+  }
+
   const pnr = "TRV-" + Math.random().toString(36).substring(2, 8).toUpperCase();
   const savedUser = getCurrentUser();
+  const guestId = getGuestId();
 
   const newBooking = {
     pnr: pnr,
     username: savedUser ? savedUser.username : "guest",
+    guestId: savedUser ? null : guestId, // Links booking to this specific browser for guest sessions
     flightId: flight.flightId,
     route: `${flight.originName} ➔ ${flight.destinationName}`,
     departure: `${formatDateMonthFirst(flight.departureDate)} @ ${flight.departure}`,
@@ -1042,12 +1217,29 @@ function handleFinalBookingSubmit() {
     passengers: bookingWizardState.passengers
   };
 
+  // 2. Save booking to STORAGE_BOOKINGS
   const existingBookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
   existingBookings.unshift(newBooking);
   localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(existingBookings));
 
+  // 3. Update seat count on the stored flight record
+  const storageFlightsKey = typeof STORAGE_FLIGHTS !== "undefined" ? STORAGE_FLIGHTS : "flights";
+  const storedFlights = JSON.parse(localStorage.getItem(storageFlightsKey) || "[]");
+  const flightIndex = storedFlights.findIndex(f => f.flightId === flight.flightId);
+
+  if (flightIndex !== -1 && storedFlights[flightIndex].seats !== undefined) {
+    const bookedCount = bookingWizardState.passengers.length;
+    storedFlights[flightIndex].seats = Math.max(0, storedFlights[flightIndex].seats - bookedCount);
+    localStorage.setItem(storageFlightsKey, JSON.stringify(storedFlights));
+    
+    // Keep local selectedFlight seats count synced
+    bookingWizardState.selectedFlight.seats = storedFlights[flightIndex].seats;
+  }
+
+  // 4. Refresh UI across the app
   refreshAllUI();
 
+  // 5. Render confirmation screen
   const card = document.getElementById("confirmationCard");
   if (card) {
     card.innerHTML = `
@@ -1296,6 +1488,37 @@ function renderRecentBookings() {
     return;
   }
 
+  // --- GUEST VIEW ---
+  const guestId = getGuestId();
+  const guestBookings = bookings.filter(b => b.guestId === guestId || (!b.guestId && b.username === "guest"));
+
+  if (guestBookings.length > 0) {
+    let tripsHtml = guestBookings.map(b => `
+      <div style="padding: 12px; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: var(--accent); font-size: 1.1rem;">${b.pnr}</strong> - Flight ${b.flightId}
+          <span style="padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; color: white; background: ${b.status === 'CANCELLED' ? '#dc3545' : '#28a745'}; margin-left: 8px;">
+            ${b.status}
+          </span>
+          <br><small style="color: var(--muted);">${b.route} | Passengers: ${b.passengers?.length || 1} | Total: ₱${(b.totalFare || 0).toLocaleString()}</small>
+        </div>
+        <button type="button" class="btn btn--accent" onclick="viewBookingDetails('${b.pnr}')">View Details</button>
+      </div>
+    `).join("");
+
+    container.innerHTML = `
+      <div class="card" style="margin-top: 16px; padding: 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>✈ Guest Trips (Saved in this Browser)</h3>
+        </div>
+        <p style="font-size:0.85rem; color:var(--muted);">Bookings made during your active guest session in this browser.</p>
+        <div style="margin-top: 12px;">
+          ${tripsHtml}
+        </div>
+      </div>`;
+    return;
+  }
+
   container.innerHTML = `
     <div class="card" style="margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.02);">
       <h3>💡 Traveling as a Guest?</h3>
@@ -1329,6 +1552,7 @@ function promptClaimBooking() {
   }
 
   target.username = savedUser.username;
+  target.guestId = null;
   localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
   alert(`✔ Booking ${target.pnr} successfully claimed and added to your My Trips dashboard!`);
   refreshAllUI();
@@ -1380,6 +1604,7 @@ function handleWaitlistSubmit(event) {
   const entry = {
     id: "WL-" + Math.floor(1000 + Math.random() * 9000),
     username: savedUser ? savedUser.username : "guest",
+    guestId: savedUser ? null : getGuestId(), // Ties guest waitlist entry to this browser
     flight: flightCode,
     name: name,
     age: parseInt(age, 10),
@@ -1408,6 +1633,18 @@ function renderWaitlistTable() {
   const savedUser = getCurrentUser();
   const allWaitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
 
+  // Helper for status badge HTML
+  const getStatusBadge = (status, pnr) => {
+    if (status === "APPROVED") {
+      return `<span style="padding: 2px 8px; border-radius: 4px; background: #28a745; color: white; font-weight: bold; font-size: 0.85rem;">APPROVED</span>
+              ${pnr ? `<br><button class="btn btn--ghost" style="font-size: 0.75rem; margin-top: 4px; padding: 2px 6px;" onclick="viewBookingDetails('${pnr}')">View Booking (${pnr})</button>` : ''}`;
+    }
+    if (status === "REJECTED") {
+      return `<span style="padding: 2px 8px; border-radius: 4px; background: #dc3545; color: white; font-weight: bold; font-size: 0.85rem;">REJECTED</span>`;
+    }
+    return `<span style="padding: 2px 8px; border-radius: 4px; background: #ffc107; color: black; font-weight: bold; font-size: 0.85rem;">PENDING</span>`;
+  };
+
   // Admin View
   if (savedUser && (savedUser.role === 'admin' || savedUser.username === 'admin')) {
     if (allWaitlist.length === 0) {
@@ -1426,8 +1663,8 @@ function renderWaitlistTable() {
         <td style="text-align:center;">${w.name} (${w.age} y/o)</td>
         <td style="text-align:center;"><span style="font-size:0.8rem; background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px;">${w.username || 'guest'}</span></td>
         <td style="text-align:center;">${w.joinedAt}</td>
-        <td style="text-align:center;"><span style="padding: 2px 6px; border-radius: 4px; background: #ffc107; color: black; font-size: 0.85rem;">${w.status}</span></td>
-        <td style="text-align:center;"><button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem;" onclick="deleteWaitlistEntry('${w.id}')">Remove</button></td>
+        <td style="text-align:center;">${getStatusBadge(w.status, w.pnr)}</td>
+        <td style="text-align:center;"><button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem;" onclick="deleteWaitlistEntry('${w.id}')">Delete Entry</button></td>
       </tr>
     `).join("");
 
@@ -1457,9 +1694,10 @@ function renderWaitlistTable() {
   }
 
   // Passenger / Guest View
+  const guestId = getGuestId();
   const userWaitlist = allWaitlist.filter(w => {
     if (savedUser) return w.username === savedUser.username;
-    return w.username === "guest";
+    return w.guestId === guestId || (!w.guestId && w.username === "guest");
   });
 
   if (userWaitlist.length === 0) {
@@ -1477,7 +1715,7 @@ function renderWaitlistTable() {
       <td style="text-align:center;"><strong>${w.flight}</strong></td>
       <td style="text-align:center;">${w.name} (${w.age} y/o)</td>
       <td style="text-align:center;">${w.joinedAt}</td>
-      <td style="text-align:center;"><span style="padding: 2px 6px; border-radius: 4px; background: #ffc107; color: black; font-size: 0.85rem;">${w.status}</span></td>
+      <td style="text-align:center;">${getStatusBadge(w.status, w.pnr)}</td>
     </tr>
   `).join("");
 
@@ -1967,6 +2205,7 @@ function handleAdminAddBookingSubmit(e) {
     passengers: [{ id: 1, name: paxName, age: age, seat: seat, baggage: 0 }]
   };
 
+// Add to confirmed bookings
   const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
   bookings.unshift(newBooking);
   localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
@@ -1984,15 +2223,18 @@ function renderAdminWaitlistApproval() {
   if (!container) return;
 
   let waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+  
+  // Filter for pending requests only
+  let pendingWaitlist = waitlist.filter(w => w.status !== "APPROVED" && w.status !== "REJECTED");
 
-  if (waitlist.length === 0) {
+  if (pendingWaitlist.length === 0) {
     container.innerHTML = `<p class="p-3 text-center" style="color:var(--muted);">No waitlisted passengers currently pending.</p>`;
     return;
   }
 
-  waitlist.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  pendingWaitlist.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-  let rows = waitlist.map((w, idx) => {
+  let rows = pendingWaitlist.map((w, idx) => {
     const flight = FLIGHT_DATABASE.find(f => f.flightId === w.flight);
     const seatsLeft = getSeatsLeft(flight);
     const hasSeatAvailable = seatsLeft > 0;
@@ -2014,7 +2256,8 @@ function renderAdminWaitlistApproval() {
             onclick="adminApproveWaitlistEntry('${w.id}')">
             Approve & Issue Seat
           </button>
-          <button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem; padding: 4px 8px;" onclick="deleteWaitlistEntry('${w.id}')">
+          <button class="btn btn--ghost" style="color:red; border-color:red; font-size:0.75rem; padding: 4px 8px;" 
+            onclick="adminRejectWaitlistEntry('${w.id}')">
             Reject
           </button>
         </td>
@@ -2037,7 +2280,7 @@ function renderAdminWaitlistApproval() {
     </table>`;
 }
 
-function adminApproveWaitlistEntry(waitlistId) {
+async function adminApproveWaitlistEntry(waitlistId) {
   let waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
   const entryIdx = waitlist.findIndex(w => w.id === waitlistId);
   if (entryIdx === -1) return;
@@ -2051,16 +2294,8 @@ function adminApproveWaitlistEntry(waitlistId) {
     return;
   }
 
-  // Find the first available seat dynamically
-  const hardcodedOccupied = ["1A", "2C", "3B", "5D", "7A", "8C", "10B", "11D"];
-  const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
-  const bookedSeats = [];
-  
-  bookings
-    .filter(b => b.flightId === flight.flightId && b.status !== "CANCELLED")
-    .forEach(b => (b.passengers || []).forEach(p => p.seat && bookedSeats.push(p.seat)));
-
-  const takenSeats = new Set([...hardcodedOccupied, ...bookedSeats]);
+// Dynamic seat lookup - pass the flight object directly
+  const takenSeats = getBookedSeatsForFlight(flight);
   const columns = ["A", "B", "C", "D"];
   let autoSeat = null;
 
@@ -2077,26 +2312,71 @@ function adminApproveWaitlistEntry(waitlistId) {
 
   if (!autoSeat) autoSeat = "1A";
 
-  const pnr = "TRV-WLA" + Math.random().toString(36).substring(2, 6).toUpperCase();
+  const passengerContact = `${entry.name.toLowerCase().replace(/\s+/g, '')}@terrava.com`;
 
-  const newBooking = {
-    pnr: pnr,
-    username: entry.username || "guest",
-    flightId: entry.flight,
-    route: `${flight.originName} ➔ ${flight.destinationName}`,
-    departure: `${formatDateMonthFirst(flight.departureDate)} @ ${flight.departure}`,
-    contact: `${entry.name.toLowerCase().replace(/\s+/g, '')}@terrava.com`,
-    status: "CONFIRMED",
-    totalFare: flight.baseFare,
-    passengers: [{ id: 1, name: entry.name, age: entry.age, seat: autoSeat, baggage: 0 }]
-  };
+  try {
+    // Call Java Backend API
+    const response = await fetch('/api/book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        flightCode: entry.flight,
+        contact: passengerContact,
+        passengers: [{
+          name: entry.name,
+          age: Number(entry.age),
+          isPwd: Boolean(entry.isPwd),
+          baggage: 0,
+          seat: autoSeat
+        }]
+      })
+    });
 
-  bookings.unshift(newBooking);
-  localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
+    const result = await response.json();
 
-  waitlist.splice(entryIdx, 1);
-  localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(waitlist));
+    if (result.success) {
+      // Synchronize booking object returned by Java server with localStorage
+      const serverBooking = result.booking;
+      const newBooking = {
+        pnr: serverBooking.pnr,
+        username: entry.username || "guest",
+        flightId: entry.flight,
+        route: `${flight.originName} ➔ ${flight.destinationName}`,
+        departure: `${formatDateMonthFirst(flight.departureDate)} @ ${flight.departure}`,
+        contact: passengerContact,
+        status: "CONFIRMED",
+        totalFare: serverBooking.totalFare,
+        passengers: serverBooking.passengers || [{ id: 1, name: entry.name, age: entry.age, seat: autoSeat, baggage: 0 }]
+      };
 
-  alert(`✔ Approved! Passenger ${entry.name} promoted from waitlist to confirmed booking (${pnr}, Seat ${autoSeat}).`);
-  refreshAllUI();
+      const bookings = JSON.parse(localStorage.getItem(STORAGE_BOOKINGS) || "[]");
+      bookings.unshift(newBooking);
+      localStorage.setItem(STORAGE_BOOKINGS, JSON.stringify(bookings));
+
+      // Update waitlist status
+      entry.status = "APPROVED";
+      entry.pnr = serverBooking.pnr;
+      localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(waitlist));
+
+      alert(`✔ Approved! Passenger ${entry.name} promoted to confirmed booking (${serverBooking.pnr}, Seat ${autoSeat}). Total: ₱${serverBooking.totalFare.toLocaleString()}`);
+      refreshAllUI();
+    } else {
+      alert(`Backend Error: ${result.message}`);
+    }
+  } catch (error) {
+    console.error("Failed to connect to backend server:", error);
+    alert("Could not reach Java backend server. Please verify WebServer is running.");
+  }
+}
+
+function adminRejectWaitlistEntry(waitlistId) {
+  let waitlist = JSON.parse(localStorage.getItem(STORAGE_WAITLIST) || "[]");
+  const entry = waitlist.find(w => w.id === waitlistId);
+  if (!entry) return;
+
+  if (confirm(`Reject waitlist request for ${entry.name}?`)) {
+    entry.status = "REJECTED";
+    localStorage.setItem(STORAGE_WAITLIST, JSON.stringify(waitlist));
+    refreshAllUI();
+  }
 }

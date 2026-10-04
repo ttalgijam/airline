@@ -1366,3 +1366,49 @@ th {
 .modal__content strong {
   color: var(--accent) !important;
 }
+
+/* Custom UI Extensions using existing CSS Variables */
+.status-badge {
+  display: inline-block;
+  background-color: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.status-badge.on-time {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.status-badge.delayed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* ============================================================
+   SEAT MAP INNER TEXT & CONTRAST FIXES
+   ============================================================ */
+
+/* Occupied / Disabled Seats (White text & translucent headrest on Red background) */
+.plane-seat:disabled .seat-label,
+.plane-seat:disabled .pax-tag {
+  color: #ffffff !important;
+}
+
+.plane-seat:disabled .seat-headrest {
+  background-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Selected Seats (Dark Navy text & headrest on Yellow background) */
+.plane-seat.is-selected .seat-label,
+.plane-seat.is-selected .pax-tag {
+  color: var(--accent-contrast, #10233F) !important;
+}
+
+.plane-seat.is-selected .seat-headrest {
+  background-color: rgba(16, 35, 63, 0.25) !important;
+}

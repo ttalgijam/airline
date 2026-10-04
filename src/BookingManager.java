@@ -158,7 +158,8 @@ public class BookingManager {
     public static class PassengerInput {
         public String fullName;
         public int age;
-        public String preferredSeat; // may be null -> auto-assign
+        public boolean isPwd; // ADDED
+        public String preferredSeat;
         public double baggageWeightKg;
     }
 

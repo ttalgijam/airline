@@ -73,7 +73,7 @@ public class WebServer {
         sendJson(ex, 200, body);
     }
 
-    @SuppressWarnings("unchecked")
+@SuppressWarnings("unchecked")
     private static void handleBook(HttpExchange ex) throws IOException {
         if (!method(ex, "POST")) return;
         Map<String, Object> req = readJsonBody(ex);
@@ -87,6 +87,11 @@ public class WebServer {
             BookingManager.PassengerInput pi = new BookingManager.PassengerInput();
             pi.fullName = Json.getString(pm, "name");
             pi.age = Json.getInt(pm, "age", 0);
+            
+            // Read isPwd from request payload
+            Object isPwdObj = pm.get("isPwd");
+            pi.isPwd = Boolean.TRUE.equals(isPwdObj);
+            
             pi.baggageWeightKg = Json.getDouble(pm, "baggage", 0);
             String seat = Json.getString(pm, "seat");
             pi.preferredSeat = (seat == null || seat.isBlank()) ? null : seat;
