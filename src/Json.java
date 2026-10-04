@@ -211,8 +211,54 @@ public final class Json {
 
         Double parseNumber() {
             int start = i;
-            while (i < s.length() && "-+.eE0123456789".indexOf(s.charAt(i)) >= 0) i++;
-            return Double.parseDouble(s.substring(start, i));
+            boolean negative = false;
+            if (i < s.length() && s.charAt(i) == '-') {
+                negative = true;
+                i++;
+            }
+
+            double value = 0.0;
+            int wholeDigits = 0;
+            while (i < s.length() && Character.isDigit(s.charAt(i))) {
+                value = value * 10.0 + (s.charAt(i) - '0');
+                wholeDigits++;
+                i++;
+            }
+
+            if (i < s.length() && s.charAt(i) == '.') {
+                i++;
+                double frac = 0.0;
+                double scale = 1.0;
+                while (i < s.length() && Character.isDigit(s.charAt(i))) {
+                    frac = frac * 10.0 + (s.charAt(i) - '0');
+                    scale *= 10.0;
+                    i++;
+                }
+                value += frac / scale;
+            }
+
+            if (i < s.length() && (s.charAt(i) == 'e' || s.charAt(i) == 'E')) {
+                i++;
+                boolean exponentNegative = false;
+                if (i < s.length() && s.charAt(i) == '-') {
+                    exponentNegative = true;
+                    i++;
+                } else if (i < s.length() && s.charAt(i) == '+') {
+                    i++;
+                }
+
+                int exponent = 0;
+                while (i < s.length() && Character.isDigit(s.charAt(i))) {
+                    exponent = exponent * 10 + (s.charAt(i) - '0');
+                    i++;
+                }
+                value *= Math.pow(10.0, exponentNegative ? -exponent : exponent);
+            }
+
+            if (wholeDigits == 0 && start == i) {
+                throw new NumberFormatException("Invalid number: " + s.substring(start));
+            }
+            return negative ? -value : value;
         }
     }
 

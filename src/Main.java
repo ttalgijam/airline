@@ -10,30 +10,31 @@ public class Main {
     private static final BookingManager manager = new BookingManager();
 
     public static void main(String[] args) {
-        manager.loadSampleFlights();
-        System.out.println("=== Terrava: Airline Ticket Reservation System ===");
-        boolean running = true;
-        while (running) {
-            displayMainMenu();
-            int choice = getUserChoice();
-            switch (choice) {
-                case 1 -> handleSearchAndSortFlights();
-                case 2 -> handleAddPassengerGroup();
-                case 3 -> handleSearchBookingByPNR();
-                case 4 -> handleUpdateBooking();
-                case 5 -> handleCancelReservation();
-                case 6 -> handleUndoCancellation();
-                case 7 -> handleDisplayManifest();
-                case 8 -> handleJoinStandby();
-                case 9 -> handleViewSeatMap();
-                case 0 -> {
-                    running = false;
-                    System.out.println("Goodbye!");
+        try (scanner) {
+            manager.loadSampleFlights();
+            System.out.println("=== Terrava: Airline Ticket Reservation System ===");
+            boolean running = true;
+            while (running) {
+                displayMainMenu();
+                int choice = getUserChoice();
+                switch (choice) {
+                    case 1 -> handleSearchAndSortFlights();
+                    case 2 -> handleAddPassengerGroup();
+                    case 3 -> handleSearchBookingByPNR();
+                    case 4 -> handleUpdateBooking();
+                    case 5 -> handleCancelReservation();
+                    case 6 -> handleUndoCancellation();
+                    case 7 -> handleDisplayManifest();
+                    case 8 -> handleJoinStandby();
+                    case 9 -> handleViewSeatMap();
+                    case 0 -> {
+                        running = false;
+                        System.out.println("Goodbye!");
+                    }
+                    default -> System.out.println("Invalid option, try again.");
                 }
-                default -> System.out.println("Invalid option, try again.");
             }
         }
-        scanner.close();
     }
 
     private static void displayMainMenu() {
@@ -151,7 +152,7 @@ public class Main {
         Double newBag = null;
         if (!pidStr.isBlank()) {
             try {
-                pid = Integer.parseInt(pidStr);
+                pid = Integer.valueOf(pidStr);
                 newBag = promptDouble("New baggage weight kg: ", 0);
             } catch (NumberFormatException ignored) { }
         }
